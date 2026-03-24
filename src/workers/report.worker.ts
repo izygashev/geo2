@@ -1,0 +1,247 @@
+/**
+ * BullMQ Worker — обработчик очереди "report-generation".
+ *
+ * Запуск: npm run worker
+ * Это ОТДЕЛЬНЫЙ Node.js-процесс, работающий параллельно с Next.js сервером.
+ *
+ * Пайплайн:
+ * 1. Playwright парсит сайт → SiteData
+ * 2. Claude генерирует ключевые запросы
+ * 3. Perplexity Sonar проверяет Share of Voice по каждому запросу
+ * 4. Claude анализирует результаты → Score + Recommendations
+ * 5. Prisma сохраняет всё в БД + списывает кредиты
+ */
+
+import "dotenv/config";
+import { Worker, Job } from "bullmq";
+import { PrismaClient } from "../generated/prisma/client.js";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { scrapeSite } from "../services/scraper.js";
+import {
+  generateKeywords,
+  checkShareOfVoice,
+  generateRecommendations,
+  type SovCheckResult,
+} from "../services/llm.js";
+
+// ─── Типы ────────────────────────────────────────────────
+interface ReportJobData {
+  reportId: string;
+  projectId: string;
+  projectUrl: string;
+  userId: string;
+}
+
+// ─── Prisma (отдельный инстанс для Worker-процесса) ──────
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL!,
+});
+const prisma = new PrismaClient({ adapter });
+
+// ─── Redis connection config ─────────────────────────────
+function parseRedisUrl(url: string) {
+  const parsed = new URL(url);
+  return {
+    host: parsed.hostname || "localhost",
+    port: Number(parsed.port) || 6379,
+    password: parsed.password || undefined,
+    maxRetriesPerRequest: null as null,
+  };
+}
+
+const redisConnection = parseRedisUrl(
+  process.env.REDIS_URL ?? "redis://localhost:6379"
+);
+
+// ─── Обработчик задачи ──────────────────────────────────
+async function processReport(job: Job<ReportJobData>): Promise<void> {
+  const { reportId, projectId, projectUrl, userId } = job.data;
+
+  console.log(`\n${"═".repeat(60)}`);
+  console.log(`[Worker] 🚀 Начинаю обработку отчёта ${reportId}`);
+  console.log(`[Worker]    URL: ${projectUrl}`);
+  console.log(`[Worker]    User: ${userId}`);
+  console.log(`${"═".repeat(60)}\n`);
+
+  try {
+    // ═══════════════════════════════════════════════════════
+    // ШАГ 1: Парсинг сайта через Playwright
+    // ═══════════════════════════════════════════════════════
+    await job.updateProgress(10);
+    console.log(`[Worker] ── Шаг 1/4: Парсинг сайта ──`);
+
+    const siteData = await scrapeSite(projectUrl);
+
+    console.log(`[Worker] ✅ Сайт спарсен`);
+    await job.updateProgress(25);
+
+    // ═══════════════════════════════════════════════════════
+    // ШАГ 2: Генерация ключевых запросов (Claude)
+    // ═══════════════════════════════════════════════════════
+    console.log(`[Worker] ── Шаг 2/4: Генерация ключевых запросов ──`);
+
+    const keywords = await generateKeywords(siteData);
+
+    console.log(
+      `[Worker] ✅ Ключевые запросы: ${keywords.map((k) => `"${k.query}"`).join(", ")}`
+    );
+    await job.updateProgress(40);
+
+    // ═══════════════════════════════════════════════════════
+    // ШАГ 3: Проверка Share of Voice (Perplexity Sonar)
+    // ═══════════════════════════════════════════════════════
+    console.log(`[Worker] ── Шаг 3/4: Проверка Share of Voice ──`);
+
+    // Последовательно, чтобы не перегружать API
+    const sovResults: SovCheckResult[] = [];
+    for (let i = 0; i < keywords.length; i++) {
+      const kw = keywords[i];
+      console.log(`[Worker]    [${i + 1}/${keywords.length}] "${kw.query}"`);
+
+      const result = await checkShareOfVoice(kw.query, projectUrl);
+      sovResults.push(result);
+
+      // Прогресс: 40% → 70% распределяем по ключевым запросам
+      const progressPerKeyword = 30 / keywords.length;
+      await job.updateProgress(Math.round(40 + progressPerKeyword * (i + 1)));
+
+      // Пауза между запросами, чтобы не триггерить rate limit
+      if (i < keywords.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
+
+    const mentionedCount = sovResults.filter((r) => r.isMentioned).length;
+    console.log(
+      `[Worker] ✅ SoV: упомянут в ${mentionedCount}/${sovResults.length} запросах`
+    );
+    await job.updateProgress(75);
+
+    // ═══════════════════════════════════════════════════════
+    // ШАГ 4: Генерация рекомендаций и Score (Claude)
+    // ═══════════════════════════════════════════════════════
+    console.log(`[Worker] ── Шаг 4/4: Генерация рекомендаций ──`);
+
+    const analysis = await generateRecommendations(siteData, sovResults);
+
+    console.log(`[Worker] ✅ Score: ${analysis.overallScore}, рекомендаций: ${analysis.recommendations.length}`);
+    await job.updateProgress(90);
+
+    // ═══════════════════════════════════════════════════════
+    // ШАГ 5: Сохранение в БД (транзакция)
+    // ═══════════════════════════════════════════════════════
+    console.log(`[Worker] ── Сохранение в БД ──`);
+    const REPORT_COST = 10;
+
+    await prisma.$transaction(async (tx) => {
+      // Обновляем статус отчёта и score
+      await tx.report.update({
+        where: { id: reportId },
+        data: {
+          status: "COMPLETED",
+          overallScore: analysis.overallScore,
+        },
+      });
+
+      // Сохраняем Share of Voice записи
+      if (sovResults.length > 0) {
+        await tx.shareOfVoice.createMany({
+          data: sovResults.map((sov) => ({
+            reportId,
+            llmProvider: sov.llmProvider,
+            keyword: sov.keyword,
+            isMentioned: sov.isMentioned,
+            competitors: sov.competitors,
+          })),
+        });
+      }
+
+      // Сохраняем рекомендации
+      if (analysis.recommendations.length > 0) {
+        await tx.recommendation.createMany({
+          data: analysis.recommendations.map((rec) => ({
+            reportId,
+            type: rec.type,
+            title: rec.title,
+            description: rec.description,
+            generatedCode: rec.generatedCode,
+          })),
+        });
+      }
+
+      // Списываем кредиты
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          credits: { decrement: REPORT_COST },
+        },
+      });
+    });
+
+    await job.updateProgress(100);
+
+    console.log(`\n${"─".repeat(60)}`);
+    console.log(`[Worker] ✅ Отчёт ${reportId} ЗАВЕРШЁН`);
+    console.log(`[Worker]    Score: ${analysis.overallScore}`);
+    console.log(`[Worker]    SoV: ${mentionedCount}/${sovResults.length}`);
+    console.log(`[Worker]    Рекомендаций: ${analysis.recommendations.length}`);
+    console.log(`${"─".repeat(60)}\n`);
+  } catch (error) {
+    console.error(`[Worker] ❌ Ошибка обработки отчёта ${reportId}:`, error);
+
+    // Ставим статус FAILED — кредиты НЕ списаны
+    try {
+      await prisma.report.update({
+        where: { id: reportId },
+        data: { status: "FAILED" },
+      });
+    } catch (dbError) {
+      console.error(`[Worker] ❌ Не удалось обновить статус на FAILED:`, dbError);
+    }
+
+    throw error; // Пробрасываем, чтобы BullMQ сделал retry
+  }
+}
+
+// ─── Создание Worker ─────────────────────────────────────
+const worker = new Worker<ReportJobData>(
+  "report-generation",
+  processReport,
+  {
+    connection: redisConnection,
+    concurrency: 1, // Один отчёт за раз (Playwright + API лимиты)
+  }
+);
+
+// ─── События ─────────────────────────────────────────────
+worker.on("ready", () => {
+  console.log("[Worker] ⚡ Worker запущен и слушает очередь 'report-generation'");
+});
+
+worker.on("completed", (job) => {
+  console.log(`[Worker] ✅ Job ${job.id} завершён успешно`);
+});
+
+worker.on("failed", (job, err) => {
+  console.log(`[Worker] ❌ Job ${job?.id} упал: ${err.message}`);
+  if (job) {
+    console.log(`[Worker]    Попытка ${job.attemptsMade} из ${job.opts.attempts}`);
+  }
+});
+
+worker.on("error", (err) => {
+  console.error("[Worker] Ошибка worker:", err);
+});
+
+// ─── Graceful Shutdown ───────────────────────────────────
+async function shutdown() {
+  console.log("\n[Worker] 🛑 Получен сигнал завершения. Останавливаюсь...");
+  await worker.close();
+  await prisma.$disconnect();
+  process.exit(0);
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+console.log("[Worker] 🏁 Инициализация завершена");

@@ -1,0 +1,384 @@
+/**
+ * OpenRouter LLM Service — взаимодействие с ИИ-моделями через OpenRouter.
+ *
+ * Используем openai SDK с baseURL OpenRouter:
+ * - Claude (anthropic/claude-sonnet-4) — генерация ключевых запросов и рекомендаций
+ * - Perplexity Sonar (perplexity/sonar) — проверка Share of Voice (поиск в интернете)
+ */
+
+import OpenAI from "openai";
+import { z } from "zod";
+import type { SiteData } from "./scraper.js";
+
+// ─── OpenRouter Client (lazy init — ждём загрузки .env) ──
+let _openrouter: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!_openrouter) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENROUTER_API_KEY is not set in environment variables");
+    }
+    _openrouter = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey,
+    });
+  }
+  return _openrouter;
+}
+
+// ─── Модели ─────────────────────────────────────────────
+const CLAUDE_MODEL = "anthropic/claude-sonnet-4";
+const SONAR_MODEL = "perplexity/sonar";
+
+// ─── Zod Схемы ──────────────────────────────────────────
+const KeywordsSchema = z.object({
+  keywords: z
+    .array(
+      z.object({
+        query: z.string(),
+        intent: z.string(),
+      })
+    )
+    .min(1)
+    .max(10),
+});
+
+const SovResultSchema = z.object({
+  isMentioned: z.boolean(),
+  mentionContext: z.string().optional(),
+  competitors: z.array(
+    z.object({
+      name: z.string(),
+      url: z.string().optional(),
+    })
+  ),
+});
+
+const RecommendationsSchema = z.object({
+  overallScore: z.number().min(0).max(100),
+  recommendations: z.array(
+    z.object({
+      type: z.string(),
+      title: z.string(),
+      description: z.string(),
+      generatedCode: z.string(),
+    })
+  ),
+});
+
+// ─── Типы ────────────────────────────────────────────────
+export interface KeywordItem {
+  query: string;
+  intent: string;
+}
+
+export interface SovCheckResult {
+  keyword: string;
+  llmProvider: string;
+  isMentioned: boolean;
+  competitors: { name: string; url?: string }[];
+}
+
+export interface RecommendationItem {
+  type: string;
+  title: string;
+  description: string;
+  generatedCode: string;
+}
+
+export interface AnalysisResult {
+  overallScore: number;
+  recommendations: RecommendationItem[];
+}
+
+// ─── Утилита: парсинг JSON из ответа LLM ───────────────
+function extractJson(text: string): string {
+  // Убираем markdown code fence если есть
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  // Ищем первый { ... } или [ ... ]
+  const braceMatch = text.match(/\{[\s\S]*\}/);
+  if (braceMatch) return braceMatch[0];
+  return text.trim();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 1. Генерация ключевых запросов
+// ═══════════════════════════════════════════════════════════
+export async function generateKeywords(siteData: SiteData): Promise<KeywordItem[]> {
+  console.log(`[LLM] 🔑 Генерирую ключевые запросы для ${siteData.url}`);
+
+  try {
+    const completion = await getClient().chat.completions.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "system",
+          content: `You are an SEO and GEO (Generative Engine Optimization) expert. 
+Your task is to generate search queries that a potential customer might ask an AI assistant (ChatGPT, Perplexity, Claude) when looking for a product or service like the one on this website.
+
+Return ONLY valid JSON, no explanations or markdown.`,
+        },
+        {
+          role: "user",
+          content: `Analyze this website and generate 5 search queries:
+
+URL: ${siteData.url}
+Title: ${siteData.title}
+Description: ${siteData.description}
+H1: ${siteData.h1}
+Content (first 1500 chars): ${siteData.bodyText.slice(0, 1500)}
+
+Return JSON in this exact format:
+{
+  "keywords": [
+    { "query": "best [category] tools in 2025", "intent": "informational" },
+    { "query": "what is the best [specific solution]", "intent": "commercial" }
+  ]
+}
+
+Generate exactly 5 diverse queries: mix of informational, commercial, and navigational intent.`,
+        },
+      ],
+    });
+
+    const rawText = completion.choices[0]?.message?.content ?? "";
+    const jsonStr = extractJson(rawText);
+    const parsed = KeywordsSchema.parse(JSON.parse(jsonStr));
+
+    console.log(`[LLM] ✅ Сгенерировано ${parsed.keywords.length} ключевых запросов`);
+    return parsed.keywords;
+  } catch (error) {
+    console.error("[LLM] ❌ Ошибка генерации ключевых слов:", error);
+    // Fallback: базовые запросы
+    const domain = new URL(siteData.url).hostname.replace("www.", "");
+    return [
+      { query: `what is ${domain}`, intent: "navigational" },
+      { query: `${siteData.title} reviews`, intent: "commercial" },
+      { query: `best alternatives to ${domain}`, intent: "commercial" },
+      { query: siteData.h1 || siteData.title || domain, intent: "informational" },
+      { query: `is ${domain} worth it`, intent: "commercial" },
+    ];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 2. Проверка Share of Voice (через Perplexity Sonar)
+// ═══════════════════════════════════════════════════════════
+export async function checkShareOfVoice(
+  keyword: string,
+  siteUrl: string
+): Promise<SovCheckResult> {
+  console.log(`[LLM] 🔍 SoV проверка: "${keyword}"`);
+
+  const domain = new URL(siteUrl).hostname.replace("www.", "");
+
+  try {
+    const completion = await getClient().chat.completions.create({
+      model: SONAR_MODEL,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "system",
+          content: `You are a helpful assistant that answers user queries. After answering, analyze your own response.
+
+Return ONLY valid JSON with this structure:
+{
+  "isMentioned": true/false,
+  "mentionContext": "brief context of how the site was mentioned, or empty string",
+  "competitors": [
+    { "name": "Competitor Name", "url": "https://example.com" }
+  ]
+}
+
+- "isMentioned" = true if you mentioned or recommended "${domain}" in your answer
+- "competitors" = other brands/products you mentioned (max 5)
+- Return valid JSON only, no markdown`,
+        },
+        {
+          role: "user",
+          content: `${keyword}
+
+After providing your answer, analyze it and return JSON indicating:
+1. Whether you mentioned or recommended ${domain} (isMentioned)
+2. List of other brands/competitors you mentioned (competitors)`,
+        },
+      ],
+    });
+
+    const rawText = completion.choices[0]?.message?.content ?? "";
+    const jsonStr = extractJson(rawText);
+
+    try {
+      const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
+      console.log(
+        `[LLM] ${parsed.isMentioned ? "✅" : "❌"} "${keyword}" → mentioned: ${parsed.isMentioned}, competitors: ${parsed.competitors.length}`
+      );
+      return {
+        keyword,
+        llmProvider: "perplexity-sonar",
+        isMentioned: parsed.isMentioned,
+        competitors: parsed.competitors,
+      };
+    } catch {
+      // Если JSON не парсится, пробуем определить по тексту
+      const lowerText = rawText.toLowerCase();
+      const lowerDomain = domain.toLowerCase();
+      const isMentioned = lowerText.includes(lowerDomain);
+
+      console.log(
+        `[LLM] ⚠️ JSON не парсится, fallback текстовый анализ: mentioned=${isMentioned}`
+      );
+      return {
+        keyword,
+        llmProvider: "perplexity-sonar",
+        isMentioned,
+        competitors: [],
+      };
+    }
+  } catch (error) {
+    console.error(`[LLM] ❌ Ошибка SoV для "${keyword}":`, error);
+    return {
+      keyword,
+      llmProvider: "perplexity-sonar",
+      isMentioned: false,
+      competitors: [],
+    };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 3. Генерация рекомендаций и итогового Score
+// ═══════════════════════════════════════════════════════════
+export async function generateRecommendations(
+  siteData: SiteData,
+  sovResults: SovCheckResult[]
+): Promise<AnalysisResult> {
+  console.log(`[LLM] 📝 Генерирую рекомендации для ${siteData.url}`);
+
+  const mentionedCount = sovResults.filter((r) => r.isMentioned).length;
+  const totalChecks = sovResults.length;
+
+  const allCompetitors = sovResults
+    .flatMap((r) => r.competitors.map((c) => c.name))
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .slice(0, 10);
+
+  try {
+    const completion = await getClient().chat.completions.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 2000,
+      messages: [
+        {
+          role: "system",
+          content: `You are a GEO (Generative Engine Optimization) expert. You help websites get recommended by AI assistants (ChatGPT, Perplexity, Claude, Gemini).
+
+Analyze the website data and Share of Voice results, then provide:
+1. An overall GEO score (0-100)
+2. Actionable recommendations to improve AI visibility
+
+Return ONLY valid JSON, no markdown or explanations.`,
+        },
+        {
+          role: "user",
+          content: `Analyze this website's AI visibility:
+
+## Website Data
+- URL: ${siteData.url}
+- Title: ${siteData.title}
+- Description: ${siteData.description}
+- H1: ${siteData.h1}
+- Has /llms.txt: ${siteData.hasLlmsTxt}
+- Schema.org types: [${siteData.schemaOrgTypes.join(", ")}]
+- Content preview: ${siteData.bodyText.slice(0, 1000)}
+
+## Share of Voice Results
+- Mentioned in ${mentionedCount} out of ${totalChecks} AI searches
+- Competitors found: [${allCompetitors.join(", ")}]
+- Detailed results:
+${sovResults.map((r) => `  - "${r.keyword}": ${r.isMentioned ? "✅ mentioned" : "❌ not mentioned"}`).join("\n")}
+
+Return JSON in this exact format:
+{
+  "overallScore": 65,
+  "recommendations": [
+    {
+      "type": "schema-org",
+      "title": "Add FAQ Schema markup",
+      "description": "Adding FAQ structured data helps AI assistants find and cite your answers directly.",
+      "generatedCode": "<script type=\\"application/ld+json\\">...</script>"
+    },
+    {
+      "type": "content",
+      "title": "Create an AI-friendly /llms.txt file",
+      "description": "...",
+      "generatedCode": "# Company Name\\n> Brief description..."
+    }
+  ]
+}
+
+Recommendation types: "schema-org", "content", "technical", "llms-txt", "authority", "competitors".
+Generate 4-7 specific, actionable recommendations with real code examples where applicable.
+The overallScore should reflect: SoV ratio, schema.org presence, llms.txt presence, content quality.`,
+        },
+      ],
+    });
+
+    const rawText = completion.choices[0]?.message?.content ?? "";
+    const jsonStr = extractJson(rawText);
+    const parsed = RecommendationsSchema.parse(JSON.parse(jsonStr));
+
+    console.log(
+      `[LLM] ✅ Score: ${parsed.overallScore}, рекомендаций: ${parsed.recommendations.length}`
+    );
+    return parsed;
+  } catch (error) {
+    console.error("[LLM] ❌ Ошибка генерации рекомендаций:", error);
+
+    // Fallback: базовый скоринг и рекомендации
+    const baseScore = Math.round((mentionedCount / Math.max(totalChecks, 1)) * 50);
+    const schemaBonus = siteData.schemaOrgTypes.length > 0 ? 15 : 0;
+    const llmsBonus = siteData.hasLlmsTxt ? 20 : 0;
+    const contentBonus = siteData.bodyText.length > 500 ? 10 : 0;
+    const fallbackScore = Math.min(baseScore + schemaBonus + llmsBonus + contentBonus, 100);
+
+    const fallbackRecs: RecommendationItem[] = [];
+
+    if (!siteData.hasLlmsTxt) {
+      fallbackRecs.push({
+        type: "llms-txt",
+        title: "Create /llms.txt file",
+        description:
+          "Add an /llms.txt file to your website root to help AI assistants understand your brand and offerings. This is a new standard for AI-friendly websites.",
+        generatedCode: `# ${siteData.title}\n> ${siteData.description}\n\nThis file provides information about our website for AI assistants.`,
+      });
+    }
+
+    if (siteData.schemaOrgTypes.length === 0) {
+      fallbackRecs.push({
+        type: "schema-org",
+        title: "Add Schema.org structured data",
+        description:
+          "Implement JSON-LD structured data (Organization, FAQPage, Product) to help AI systems understand your content.",
+        generatedCode: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "${siteData.title}",\n  "url": "${siteData.url}"\n}\n</script>`,
+      });
+    }
+
+    if (mentionedCount === 0) {
+      fallbackRecs.push({
+        type: "authority",
+        title: "Improve brand authority for AI citations",
+        description:
+          "Your brand was not mentioned in any AI search results. Focus on creating authoritative, well-cited content that AI systems are likely to reference.",
+        generatedCode: "",
+      });
+    }
+
+    return {
+      overallScore: fallbackScore,
+      recommendations: fallbackRecs,
+    };
+  }
+}
