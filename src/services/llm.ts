@@ -31,6 +31,12 @@ function getClient(): OpenAI {
 const CLAUDE_MODEL = "anthropic/claude-sonnet-4";
 const SONAR_MODEL = "perplexity/sonar";
 
+// Бесплатные fallback-модели (если закончились кредиты)
+const FREE_FALLBACK_MODELS = [
+  "stepfun/step-3.5-flash:free",
+  "qwen/qwen3-4b:free",
+];
+
 // ─── Zod Схемы ──────────────────────────────────────────
 const KeywordsSchema = z.object({
   keywords: z
@@ -103,6 +109,86 @@ function extractJson(text: string): string {
   return text.trim();
 }
 
+// ─── Утилита: вызов LLM с fallback на бесплатные модели при 402 ───
+async function callWithFallback(
+  messages: { role: "system" | "user"; content: string }[],
+  maxTokens: number,
+  primaryModel: string = CLAUDE_MODEL
+): Promise<string> {
+  // Пробуем основную модель
+  try {
+    const completion = await getClient().chat.completions.create({
+      model: primaryModel,
+      max_tokens: maxTokens,
+      messages,
+    });
+    return completion.choices[0]?.message?.content ?? "";
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status === 402) {
+      console.log(`[LLM] ⚠️ 402 на ${primaryModel}, переключаюсь на бесплатные модели...`);
+    } else {
+      throw error; // Другие ошибки — пробрасываем
+    }
+  }
+
+  // Fallback: пробуем бесплатные модели
+  for (const freeModel of FREE_FALLBACK_MODELS) {
+    try {
+      console.log(`[LLM] 🔄 Пробую бесплатную модель: ${freeModel}`);
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+          "X-Title": "GEO SaaS",
+        },
+        body: JSON.stringify({
+          model: freeModel,
+          max_tokens: maxTokens,
+          messages,
+        }),
+      });
+
+      if (resp.status === 429) {
+        console.log(`[LLM] ⏳ Rate limit на ${freeModel}, жду 3с...`);
+        await new Promise((r) => setTimeout(r, 3000));
+        const retry = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+            "X-Title": "GEO SaaS",
+          },
+          body: JSON.stringify({ model: freeModel, max_tokens: maxTokens, messages }),
+        });
+        if (retry.ok) {
+          const data = await retry.json();
+          const text = data.choices?.[0]?.message?.content ?? "";
+          if (text) return text;
+        }
+        continue;
+      }
+
+      if (!resp.ok) {
+        console.error(`[LLM] ❌ ${freeModel} вернул ${resp.status}`);
+        continue;
+      }
+
+      const data = await resp.json();
+      const text = data.choices?.[0]?.message?.content ?? "";
+      if (text) return text;
+    } catch (err) {
+      console.error(`[LLM] ❌ Ошибка на ${freeModel}:`, err);
+      continue;
+    }
+  }
+
+  throw new Error("Все модели недоступны (платные — 402, бесплатные — ошибка)");
+}
+
 // ═══════════════════════════════════════════════════════════
 // 1. Генерация ключевых запросов
 // ═══════════════════════════════════════════════════════════
@@ -110,10 +196,8 @@ export async function generateKeywords(siteData: SiteData): Promise<KeywordItem[
   console.log(`[LLM] 🔑 Генерирую ключевые запросы для ${siteData.url}`);
 
   try {
-    const completion = await getClient().chat.completions.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 1000,
-      messages: [
+    const rawText = await callWithFallback(
+      [
         {
           role: "system",
           content: `You are an SEO and GEO (Generative Engine Optimization) expert. 
@@ -142,9 +226,10 @@ Return JSON in this exact format:
 Generate exactly 5 diverse queries: mix of informational, commercial, and navigational intent.`,
         },
       ],
-    });
+      1000,
+      CLAUDE_MODEL
+    );
 
-    const rawText = completion.choices[0]?.message?.content ?? "";
     const jsonStr = extractJson(rawText);
     const parsed = KeywordsSchema.parse(JSON.parse(jsonStr));
 
@@ -176,10 +261,8 @@ export async function checkShareOfVoice(
   const domain = new URL(siteUrl).hostname.replace("www.", "");
 
   try {
-    const completion = await getClient().chat.completions.create({
-      model: SONAR_MODEL,
-      max_tokens: 1000,
-      messages: [
+    const rawText = await callWithFallback(
+      [
         {
           role: "system",
           content: `You are a helpful assistant that answers user queries. After answering, analyze your own response.
@@ -206,9 +289,10 @@ After providing your answer, analyze it and return JSON indicating:
 2. List of other brands/competitors you mentioned (competitors)`,
         },
       ],
-    });
+      1000,
+      SONAR_MODEL
+    );
 
-    const rawText = completion.choices[0]?.message?.content ?? "";
     const jsonStr = extractJson(rawText);
 
     try {
@@ -267,23 +351,15 @@ export async function generateRecommendations(
     .slice(0, 10);
 
   try {
-    const completion = await getClient().chat.completions.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 2000,
-      messages: [
-        {
-          role: "system",
-          content: `You are a GEO (Generative Engine Optimization) expert. You help websites get recommended by AI assistants (ChatGPT, Perplexity, Claude, Gemini).
+    const systemContent = `You are a GEO (Generative Engine Optimization) expert. You help websites get recommended by AI assistants (ChatGPT, Perplexity, Claude, Gemini).
 
 Analyze the website data and Share of Voice results, then provide:
 1. An overall GEO score (0-100)
 2. Actionable recommendations to improve AI visibility
 
-Return ONLY valid JSON, no markdown or explanations.`,
-        },
-        {
-          role: "user",
-          content: `Analyze this website's AI visibility:
+Return ONLY valid JSON, no markdown or explanations.`;
+
+    const userContent = `Analyze this website's AI visibility:
 
 ## Website Data
 - URL: ${siteData.url}
@@ -321,12 +397,17 @@ Return JSON in this exact format:
 
 Recommendation types: "schema-org", "content", "technical", "llms-txt", "authority", "competitors".
 Generate 4-7 specific, actionable recommendations with real code examples where applicable.
-The overallScore should reflect: SoV ratio, schema.org presence, llms.txt presence, content quality.`,
-        },
-      ],
-    });
+The overallScore should reflect: SoV ratio, schema.org presence, llms.txt presence, content quality.`;
 
-    const rawText = completion.choices[0]?.message?.content ?? "";
+    const rawText = await callWithFallback(
+      [
+        { role: "system", content: systemContent },
+        { role: "user", content: userContent },
+      ],
+      2000,
+      CLAUDE_MODEL
+    );
+
     const jsonStr = extractJson(rawText);
     const parsed = RecommendationsSchema.parse(JSON.parse(jsonStr));
 

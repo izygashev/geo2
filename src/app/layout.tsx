@@ -27,9 +27,9 @@ export default function RootLayout({
   return (
     <html
       lang="ru"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-white">
+      <body className="min-h-full flex flex-col bg-[#F7F6F3] text-[#1a1a1a] antialiased">
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

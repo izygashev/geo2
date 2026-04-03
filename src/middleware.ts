@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const publicRoutes = ["/", "/sign-in", "/sign-up"];
+const publicRoutes = ["/", "/sign-in", "/sign-up", "/privacy", "/offer"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,6 +13,16 @@ export async function middleware(request: NextRequest) {
 
   // Пропускаем публичный API (auth проверяется внутри роутов)
   if (pathname.startsWith("/api/reports")) {
+    return NextResponse.next();
+  }
+
+  // Пропускаем вебхук ЮKassa (проверка IP внутри роута)
+  if (pathname.startsWith("/api/billing/webhook")) {
+    return NextResponse.next();
+  }
+
+  // Пропускаем публичный API экспресс-анализа (доступен без авторизации)
+  if (pathname.startsWith("/api/analyze")) {
     return NextResponse.next();
   }
 

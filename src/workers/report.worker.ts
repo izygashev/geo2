@@ -133,6 +133,17 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
     console.log(`[Worker] ── Сохранение в БД ──`);
     const REPORT_COST = 10;
 
+    // Проверяем, что отчёт ещё существует в БД
+    const existingReport = await prisma.report.findUnique({
+      where: { id: reportId },
+      select: { id: true },
+    });
+
+    if (!existingReport) {
+      console.error(`[Worker] ❌ Отчёт ${reportId} не найден в БД — пропускаем сохранение`);
+      return; // Job считается завершённым, но данные не сохраняются
+    }
+
     await prisma.$transaction(async (tx) => {
       // Обновляем статус отчёта и score
       await tx.report.update({
@@ -191,7 +202,7 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
 
     // Ставим статус FAILED — кредиты НЕ списаны
     try {
-      await prisma.report.update({
+      await prisma.report.updateMany({
         where: { id: reportId },
         data: { status: "FAILED" },
       });

@@ -1,33 +1,39 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import {
-  Bot,
   BarChart3,
-  Shield,
-  Zap,
-  Globe,
   TrendingUp,
+  Globe,
+  Code2,
+  Check,
+  ArrowRight,
+  Search,
 } from "lucide-react";
 import { HeroForm } from "@/components/hero-form";
+import { FaqAccordion } from "@/components/faq-accordion";
+import { Footer } from "@/components/footer";
 
 export default async function HomePage() {
   const session = await auth();
   const isAuthenticated = !!session;
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950">
-      {/* Navigation */}
-      <nav className="border-b border-slate-800/50">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <Globe className="h-6 w-6 text-blue-500" />
-            <span className="text-lg font-bold text-white">GEO SaaS</span>
-          </div>
-          <div className="flex items-center gap-4">
+    <div className="flex min-h-screen flex-col bg-[#F7F6F3] text-[#1a1a1a]">
+      {/* ─── Navigation ─── */}
+      <nav className="sticky top-0 z-50 border-b border-[#EAEAEA] bg-[#F7F6F3]/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+          <Link href="/" className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-[#787774]" />
+            <span className="text-sm font-semibold tracking-tight">
+              GEO SaaS
+            </span>
+          </Link>
+
+          <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <Link
                 href="/dashboard"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                className="btn-tactile rounded-md bg-[#111] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#333]"
               >
                 Дашборд
               </Link>
@@ -35,15 +41,15 @@ export default async function HomePage() {
               <>
                 <Link
                   href="/sign-in"
-                  className="text-sm font-medium text-slate-400 transition-colors hover:text-white"
+                  className="text-sm text-[#787774] transition-colors hover:text-[#1a1a1a]"
                 >
                   Войти
                 </Link>
                 <Link
                   href="/sign-up"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                  className="btn-tactile rounded-md bg-[#111] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#333]"
                 >
-                  Регистрация
+                  Начать бесплатно
                 </Link>
               </>
             )}
@@ -51,67 +57,175 @@ export default async function HomePage() {
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="relative flex flex-1 flex-col items-center justify-center px-6 py-24">
-        {/* Gradient glow */}
-        <div className="absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute left-1/2 top-1/4 h-[500px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-600/10 blur-[120px]" />
-          <div className="absolute right-1/4 top-1/2 h-[300px] w-[400px] rounded-full bg-purple-600/8 blur-[100px]" />
+      {/* ─── Hero — asymmetric split layout (taste-skill: DESIGN_VARIANCE 8) ─── */}
+      <section className="relative min-h-[100dvh] flex items-center">
+        {/* Ambient warm blob — fixed, pointer-events-none */}
+        <div className="pointer-events-none fixed inset-0 -z-10">
+          <div className="absolute left-[-10%] top-[10%] h-[500px] w-[600px] rounded-full bg-gradient-to-br from-[#F0E6D6]/40 via-transparent to-transparent blur-[120px] opacity-[0.04]" />
         </div>
 
-        <div className="flex flex-col items-center gap-6 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/50 bg-slate-900/50 px-4 py-1.5 text-sm text-slate-400 backdrop-blur-sm">
-            <Bot className="h-4 w-4 text-blue-400" />
-            Аналитика AI Visibility
+        <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 py-24 lg:grid-cols-[1.2fr_1fr] lg:gap-20 lg:py-32">
+          {/* Left — text content */}
+          <div className="flex flex-col justify-center">
+            <p className="mb-6 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+              AI Visibility Platform
+            </p>
+            <h1 className="font-sans text-4xl font-bold leading-none tracking-tighter md:text-6xl">
+              Узнайте, что ИИ
+              <br />
+              <span className="text-[#787774]">думает о вашем бренде</span>
+            </h1>
+            <p className="mt-6 max-w-[50ch] text-base leading-relaxed text-[#787774]">
+              Анализируем, как ChatGPT, Perplexity и Claude упоминают вашу
+              компанию. Стратегия оптимизации для AI-поисковиков.
+            </p>
+
+            {/* CTA — compact input */}
+            <div className="mt-10 max-w-lg">
+              <HeroForm isAuthenticated={isAuthenticated} />
+            </div>
+
+            {/* Suggestion chips */}
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#BBBBBB]">
+                Попробуйте:
+              </span>
+              {["apple.com", "ozon.ru", "tinkoff.ru"].map((site) => (
+                <span
+                  key={site}
+                  className="cursor-default rounded-md border border-[#EAEAEA] bg-white px-2.5 py-1 text-xs text-[#787774] transition-colors hover:border-[#D5D5D5]"
+                >
+                  {site}
+                </span>
+              ))}
+            </div>
           </div>
 
-          <h1 className="max-w-3xl text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
-            Узнайте, рекомендует ли{" "}
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              ИИ ваш бренд
-            </span>
-          </h1>
-
-          <p className="max-w-xl text-lg leading-relaxed text-slate-400">
-            Анализируем, как ChatGPT, Perplexity и Claude упоминают вашу
-            компанию. Получите стратегию оптимизации для AI-поисковиков.
-          </p>
-
-          <div className="mt-4 w-full max-w-xl">
-            <HeroForm isAuthenticated={isAuthenticated} />
-          </div>
-
-          <div className="mt-2 flex items-center gap-6 text-sm text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5" />
-              Анализ за 2 минуты
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5" />
-              50 бесплатных кредитов
-            </span>
+          {/* Right — visual metric placeholder */}
+          <div className="hidden lg:flex items-center justify-center">
+            <div className="relative w-full max-w-sm rounded-xl border border-[#EAEAEA] bg-white p-8">
+              {/* Fake dashboard card */}
+              <div className="mb-6 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
+                <Search className="h-3.5 w-3.5" />
+                AI Visibility Score
+              </div>
+              <div className="text-5xl font-bold tracking-tighter text-[#1a1a1a]">
+                74<span className="text-xl text-[#CCCCCC]">/100</span>
+              </div>
+              <div className="mt-6 space-y-3">
+                {[
+                  { label: "ChatGPT", w: "w-[85%]" },
+                  { label: "Perplexity", w: "w-[62%]" },
+                  { label: "Claude", w: "w-[48%]" },
+                ].map((bar) => (
+                  <div key={bar.label}>
+                    <div className="mb-1 flex justify-between text-xs text-[#787774]">
+                      <span>{bar.label}</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-[#F0EFEB]">
+                      <div className={`h-full rounded-full bg-[#1a1a1a] ${bar.w}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 border-t border-[#EAEAEA] pt-4 text-xs text-[#BBBBBB]">
+                Обновлено 2 минуты назад
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="border-t border-slate-800/50 bg-slate-900/30 py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <h2 className="mb-12 text-center text-2xl font-bold text-white">
-            Что вы получите
+      {/* ─── AI Marquee ─── */}
+      <section className="border-y border-[#EAEAEA] py-6">
+        <div
+          className="relative mx-auto max-w-5xl overflow-hidden"
+          style={{
+            maskImage:
+              "linear-gradient(to right, transparent 0, black 128px, black calc(100% - 128px), transparent 100%)",
+            WebkitMaskImage:
+              "linear-gradient(to right, transparent 0, black 128px, black calc(100% - 128px), transparent 100%)",
+          }}
+        >
+          <div className="flex w-max animate-marquee items-center gap-16">
+            {[
+              { name: "ChatGPT", sub: "OpenAI" },
+              { name: "Claude", sub: "Anthropic" },
+              { name: "Perplexity", sub: "AI Search" },
+              { name: "Gemini", sub: "Google" },
+              { name: "Copilot", sub: "Microsoft" },
+              { name: "Meta AI", sub: "Meta" },
+            ].map((ai) => (
+              <div key={`a-${ai.name}`} className="flex shrink-0 items-center gap-2">
+                <span className="text-sm font-medium text-[#BBBBBB]">{ai.name}</span>
+                <span className="text-[10px] text-[#D5D5D5]">/</span>
+                <span className="text-xs text-[#CCCCCC]">{ai.sub}</span>
+              </div>
+            ))}
+            {[
+              { name: "ChatGPT", sub: "OpenAI" },
+              { name: "Claude", sub: "Anthropic" },
+              { name: "Perplexity", sub: "AI Search" },
+              { name: "Gemini", sub: "Google" },
+              { name: "Copilot", sub: "Microsoft" },
+              { name: "Meta AI", sub: "Meta" },
+            ].map((ai) => (
+              <div key={`b-${ai.name}`} className="flex shrink-0 items-center gap-2">
+                <span className="text-sm font-medium text-[#BBBBBB]">{ai.name}</span>
+                <span className="text-[10px] text-[#D5D5D5]">/</span>
+                <span className="text-xs text-[#CCCCCC]">{ai.sub}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Features — asymmetric bento grid ─── */}
+      <section className="py-24 lg:py-32">
+        <div className="mx-auto max-w-5xl px-6">
+          <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+            Возможности
+          </p>
+          <h2 className="mb-16 max-w-lg text-2xl font-bold tracking-tighter md:text-3xl">
+            Всё, что нужно для оптимизации
+            <br className="hidden md:block" />
+            <span className="text-[#787774]">AI-видимости вашего бренда</span>
           </h2>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
+
+          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-[#EAEAEA] bg-[#EAEAEA] md:grid-cols-2">
+            {[
+              {
+                icon: Search,
+                title: "Share of Voice в ИИ",
+                desc: "Узнайте, как часто ChatGPT, Perplexity и Claude рекомендуют ваш бренд по целевым запросам.",
+              },
+              {
+                icon: BarChart3,
+                title: "Анализ конкурентов",
+                desc: "Сравните AI-видимость с конкурентами. Узнайте, кого ИИ рекомендует вместо вас.",
+              },
+              {
+                icon: TrendingUp,
+                title: "Стратегия оптимизации",
+                desc: "Конкретные рекомендации: Schema.org, llms.txt, контентная стратегия для ИИ.",
+              },
+              {
+                icon: Code2,
+                title: "Готовый код",
+                desc: "Получите Schema.org разметку, meta-теги и llms.txt — готовые к вставке на сайт.",
+              },
+            ].map((feature, i) => (
               <div
                 key={feature.title}
-                className="rounded-xl border border-slate-800/50 bg-slate-900/50 p-6 backdrop-blur-sm transition-colors hover:border-slate-700/50"
+                className="group bg-white p-8 transition-colors duration-300 hover:bg-[#FBFBFA]"
+                style={{ "--index": i } as React.CSSProperties}
               >
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600/10">
-                  <feature.icon className="h-5 w-5 text-blue-400" />
-                </div>
-                <h3 className="mb-2 font-semibold text-white">{feature.title}</h3>
-                <p className="text-sm leading-relaxed text-slate-400">
-                  {feature.description}
+                <feature.icon className="mb-4 h-5 w-5 text-[#787774] transition-colors group-hover:text-[#1a1a1a]" strokeWidth={1.5} />
+                <h3 className="mb-2 text-sm font-semibold tracking-tight text-[#1a1a1a]">
+                  {feature.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-[#787774]">
+                  {feature.desc}
                 </p>
               </div>
             ))}
@@ -119,39 +233,165 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/50 py-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <Globe className="h-4 w-4" />
-            GEO SaaS
-          </div>
-          <p className="text-sm text-slate-600">
-            © {new Date().getFullYear()} Все права защищены
+      {/* ─── Pricing ─── */}
+      <section className="border-t border-[#EAEAEA] py-24 lg:py-32">
+        <div className="mx-auto max-w-5xl px-6">
+          <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+            Тарифы
           </p>
+          <h2 className="mb-3 max-w-md text-2xl font-bold tracking-tighter md:text-3xl">
+            Начните бесплатно
+          </h2>
+          <p className="mb-14 text-sm text-[#787774]">
+            Масштабируйтесь по мере роста
+          </p>
+
+          <div className="mx-auto grid max-w-3xl gap-px overflow-hidden rounded-xl border border-[#EAEAEA] bg-[#EAEAEA] lg:grid-cols-3">
+            {/* Free */}
+            <div className="flex flex-col bg-white p-6">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-[#787774]">Free</h3>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-3xl font-bold tracking-tighter">0</span>
+                <span className="text-sm text-[#BBBBBB]">₽/мес</span>
+              </div>
+              <p className="mt-1 text-xs text-[#BBBBBB]">50 кредитов при регистрации</p>
+
+              <ul className="mt-8 flex-1 space-y-3">
+                {[
+                  "5 отчётов (50 кредитов)",
+                  "Share of Voice аналитика",
+                  "Рекомендации с кодом",
+                  "1 проект",
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-[#555]">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#CCCCCC]" strokeWidth={2} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                href="/sign-up"
+                className="btn-tactile mt-8 flex h-9 w-full items-center justify-center rounded-md border border-[#EAEAEA] text-sm font-medium text-[#555] transition-colors hover:border-[#D5D5D5] hover:bg-[#FBFBFA]"
+              >
+                Начать бесплатно
+              </Link>
+            </div>
+
+            {/* Pro */}
+            <div className="relative flex flex-col bg-white p-6">
+              <div className="absolute -top-px left-0 right-0 h-[2px] bg-[#111]" />
+              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]">Pro</h3>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-3xl font-bold tracking-tighter">1 990</span>
+                <span className="text-sm text-[#BBBBBB]">₽/мес</span>
+              </div>
+              <p className="mt-1 text-xs text-[#BBBBBB]">200 кредитов ежемесячно</p>
+
+              <ul className="mt-8 flex-1 space-y-3">
+                {[
+                  "20 отчётов/мес",
+                  "Все AI-провайдеры",
+                  "Анализ конкурентов",
+                  "До 10 проектов",
+                  "Приоритетная генерация",
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-[#555]">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1a1a1a]" strokeWidth={2} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                href="/sign-up"
+                className="btn-tactile mt-8 flex h-9 w-full items-center justify-center rounded-md bg-[#111] text-sm font-medium text-white transition-colors hover:bg-[#333]"
+              >
+                Начать с Pro
+              </Link>
+            </div>
+
+            {/* Agency */}
+            <div className="flex flex-col bg-white p-6">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-[#787774]">Agency</h3>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-3xl font-bold tracking-tighter">4 990</span>
+                <span className="text-sm text-[#BBBBBB]">₽/мес</span>
+              </div>
+              <p className="mt-1 text-xs text-[#BBBBBB]">600 кредитов ежемесячно</p>
+
+              <ul className="mt-8 flex-1 space-y-3">
+                {[
+                  "60 отчётов/мес",
+                  "Все AI-провайдеры",
+                  "API-доступ",
+                  "Безлимитные проекты",
+                  "White-label отчёты",
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-[#555]">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#CCCCCC]" strokeWidth={2} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                href="/sign-up"
+                className="btn-tactile mt-8 flex h-9 w-full items-center justify-center rounded-md border border-[#EAEAEA] text-sm font-medium text-[#555] transition-colors hover:border-[#D5D5D5] hover:bg-[#FBFBFA]"
+              >
+                Связаться
+              </Link>
+            </div>
+          </div>
         </div>
-      </footer>
+      </section>
+
+      {/* ─── FAQ ─── */}
+      <section className="border-t border-[#EAEAEA] py-24 lg:py-32">
+        <div className="mx-auto max-w-5xl px-6">
+          <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+            FAQ
+          </p>
+          <h2 className="mb-14 text-2xl font-bold tracking-tighter md:text-3xl">
+            Частые вопросы
+          </h2>
+          <FaqAccordion />
+        </div>
+      </section>
+
+      {/* ─── Bottom CTA ─── */}
+      <section className="border-t border-[#EAEAEA] py-24 lg:py-32">
+        <div className="mx-auto max-w-5xl px-6">
+          <div className="mx-auto max-w-xl text-center">
+            <h2 className="text-2xl font-bold tracking-tighter md:text-3xl">
+              Готовы узнать, что о вас
+              <br />
+              <span className="text-[#787774]">думает ИИ?</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-[#787774]">
+              Первые 5 отчётов бесплатно. Без привязки карты.
+            </p>
+            <div className="mt-8 flex items-center justify-center gap-3">
+              <Link
+                href="/sign-up"
+                className="btn-tactile inline-flex h-9 items-center gap-2 rounded-md bg-[#111] px-5 text-sm font-medium text-white transition-colors hover:bg-[#333]"
+              >
+                Начать бесплатно
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+              <Link
+                href="/sign-in"
+                className="btn-tactile inline-flex h-9 items-center rounded-md border border-[#EAEAEA] px-5 text-sm font-medium text-[#555] transition-colors hover:border-[#D5D5D5] hover:bg-white"
+              >
+                Войти
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Footer ─── */}
+      <Footer />
     </div>
   );
 }
-
-const features = [
-  {
-    icon: Bot,
-    title: "Share of Voice в ИИ",
-    description:
-      "Узнайте, как часто ChatGPT, Perplexity и Claude рекомендуют ваш бренд по целевым запросам.",
-  },
-  {
-    icon: BarChart3,
-    title: "Анализ конкурентов",
-    description:
-      "Сравните AI-видимость вашего бренда с конкурентами. Выясните, кого ИИ рекомендует вместо вас.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Стратегия оптимизации",
-    description:
-      "Получите конкретные рекомендации: разметка Schema.org, llms.txt, контентная стратегия для ИИ.",
-  },
-];

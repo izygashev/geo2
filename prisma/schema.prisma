@@ -26,6 +26,20 @@ enum ReportStatus {
   FAILED
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELLED
+  REFUNDED
+}
+
 // ==========================================
 // Models
 // ==========================================
@@ -40,7 +54,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projects Project[]
+  projects      Project[]
+  subscriptions Subscription[]
+  payments      Payment[]
 }
 
 model Project {
@@ -102,4 +118,46 @@ model Recommendation {
   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  userId             String
+  plan               Plan
+  status             SubscriptionStatus @default(ACTIVE)
+  creditsPerMonth    Int
+  priceKopecks       Int                // Цена в копейках (1990₽ = 199000)
+  paymentMethodId    String?            // ID сохранённого метода оплаты ЮKassa
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime
+  cancelledAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  userId            String
+  subscriptionId    String?
+  yookassaPaymentId String        @unique
+  amount            Int           // Сумма в копейках
+  currency          String        @default("RUB")
+  status            PaymentStatus @default(PENDING)
+  credits           Int           // Кредиты к начислению
+  description       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([yookassaPaymentId])
+  @@index([subscriptionId])
 }

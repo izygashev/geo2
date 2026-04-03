@@ -10,7 +10,7 @@ export function SignOutButton() {
       variant="ghost"
       size="sm"
       onClick={() => signOut({ callbackUrl: "/" })}
-      className="w-full justify-start gap-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+      className="w-full justify-start gap-2 text-[#787774] hover:bg-[#F7F6F3] hover:text-[#1a1a1a]"
     >
       <LogOut className="h-4 w-4" />
       Выйти

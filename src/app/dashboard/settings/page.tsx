@@ -36,32 +36,32 @@ export default async function SettingsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Настройки</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-lg font-bold tracking-tighter text-[#1a1a1a]">Настройки</h1>
+        <p className="mt-1 text-sm text-[#787774]">
           Управление аккаунтом и подпиской
         </p>
       </div>
 
-      <div className="max-w-2xl space-y-6">
+      <div className="max-w-2xl space-y-4">
         {/* Profile */}
-        <div className="rounded-xl border border-slate-800/50 bg-slate-900/50 p-6">
+        <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
           <div className="mb-4 flex items-center gap-2">
-            <User className="h-5 w-5 text-slate-400" />
-            <h2 className="font-semibold text-white">Профиль</h2>
+            <User className="h-4 w-4 text-[#787774]" />
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">Профиль</h2>
           </div>
-          <Separator className="mb-4 bg-slate-800/50" />
+          <Separator className="mb-4 bg-[#EAEAEA]" />
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Имя</span>
-              <span className="text-sm text-white">{user.name}</span>
+              <span className="text-sm text-[#787774]">Имя</span>
+              <span className="text-sm text-[#1a1a1a]">{user.name}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Email</span>
-              <span className="text-sm text-white">{user.email}</span>
+              <span className="text-sm text-[#787774]">Email</span>
+              <span className="text-sm text-[#1a1a1a]">{user.email}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Дата регистрации</span>
-              <span className="text-sm text-white">
+              <span className="text-sm text-[#787774]">Дата регистрации</span>
+              <span className="text-sm text-[#1a1a1a]">
                 {user.createdAt.toLocaleDateString("ru-RU", {
                   day: "numeric",
                   month: "long",
@@ -73,27 +73,27 @@ export default async function SettingsPage() {
         </div>
 
         {/* Subscription */}
-        <div className="rounded-xl border border-slate-800/50 bg-slate-900/50 p-6">
+        <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
           <div className="mb-4 flex items-center gap-2">
-            <Shield className="h-5 w-5 text-slate-400" />
-            <h2 className="font-semibold text-white">Подписка</h2>
+            <Shield className="h-4 w-4 text-[#787774]" />
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">Подписка</h2>
           </div>
-          <Separator className="mb-4 bg-slate-800/50" />
+          <Separator className="mb-4 bg-[#EAEAEA]" />
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Текущий план</span>
+              <span className="text-sm text-[#787774]">Текущий план</span>
               <Badge
                 variant="secondary"
-                className="bg-blue-600/10 text-blue-400 hover:bg-blue-600/10"
+                className="border-[#EAEAEA] bg-[#F7F6F3] text-[#787774] hover:bg-[#F7F6F3]"
               >
                 {planLabels[user.plan]}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Кредиты</span>
+              <span className="text-sm text-[#787774]">Кредиты</span>
               <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-slate-500" />
-                <span className="text-sm font-medium text-white">
+                <CreditCard className="h-3.5 w-3.5 text-[#787774]" />
+                <span className="text-sm font-medium text-[#1a1a1a]">
                   {user.credits}
                 </span>
               </div>

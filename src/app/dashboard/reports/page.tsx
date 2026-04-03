@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { FileBarChart } from "lucide-react";
 import Link from "next/link";
+import { ReportListItemProcessing } from "@/components/report-list-item";
 
 export default async function ReportsPage() {
   const session = await auth();
@@ -24,66 +25,70 @@ export default async function ReportsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Отчёты</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-lg font-bold tracking-tighter text-[#1a1a1a]">Отчёты</h1>
+        <p className="mt-1 text-sm text-[#787774]">
           История всех аналитических отчётов
         </p>
       </div>
 
       {reports.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-900/30 py-20">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800">
-            <FileBarChart className="h-7 w-7 text-slate-500" />
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#EAEAEA] bg-white py-20">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-[#EAEAEA] bg-[#FBFBFA]">
+            <FileBarChart className="h-5 w-5 text-[#BBBBBB]" />
           </div>
-          <h3 className="mt-4 text-lg font-medium text-white">
+          <h3 className="mt-4 text-sm font-semibold text-[#1a1a1a]">
             Нет отчётов
           </h3>
-          <p className="mt-1 max-w-sm text-center text-sm text-slate-500">
+          <p className="mt-1 max-w-sm text-center text-sm text-[#787774]">
             Отчёты появятся здесь после запуска анализа в одном из проектов.
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {reports.map((report) => (
+        <div className="space-y-2">
+          {reports.map((report) =>
+            report.status === "PROCESSING" ? (
+              <ReportListItemProcessing
+                key={report.id}
+                reportId={report.id}
+                projectName={report.project.name}
+                projectUrl={report.project.url}
+                createdAt={report.createdAt.toLocaleDateString("ru-RU")}
+              />
+            ) : (
             <Link
               key={report.id}
               href={`/dashboard/reports/${report.id}`}
-              className="flex items-center justify-between rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 transition-colors hover:border-slate-700/50"
+              className="flex items-center justify-between rounded-xl border border-[#EAEAEA] bg-white p-4 transition-colors hover:bg-[#FBFBFA]"
             >
               <div>
-                <h3 className="font-medium text-white">
+                <h3 className="text-sm font-medium text-[#1a1a1a]">
                   {report.project.name}
                 </h3>
-                <p className="text-sm text-slate-500">{report.project.url}</p>
+                <p className="text-sm text-[#787774]">{report.project.url}</p>
               </div>
               <div className="flex items-center gap-4">
                 {report.overallScore !== null && (
-                  <span className="text-lg font-bold text-white">
+                  <span className="text-base font-bold tracking-tighter text-[#1a1a1a]">
                     {report.overallScore}
-                    <span className="text-sm text-slate-500">/100</span>
+                    <span className="text-sm text-[#BBBBBB]">/100</span>
                   </span>
                 )}
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  className={`rounded-md border px-2.5 py-0.5 text-xs font-medium ${
                     report.status === "COMPLETED"
-                      ? "bg-emerald-600/10 text-emerald-400"
-                      : report.status === "PROCESSING"
-                        ? "bg-amber-600/10 text-amber-400"
-                        : "bg-red-600/10 text-red-400"
+                      ? "border-[#D1E7DD] bg-[#EDF3EC] text-[#2D6A4F]"
+                      : "border-[#F5C2C7] bg-[#FDEBEC] text-[#B02A37]"
                   }`}
                 >
-                  {report.status === "COMPLETED"
-                    ? "Готов"
-                    : report.status === "PROCESSING"
-                      ? "В процессе"
-                      : "Ошибка"}
+                  {report.status === "COMPLETED" ? "Готов" : "Ошибка"}
                 </span>
-                <span className="text-xs text-slate-600">
+                <span className="text-xs text-[#BBBBBB]">
                   {report.createdAt.toLocaleDateString("ru-RU")}
                 </span>
               </div>
             </Link>
-          ))}
+            )
+          )}
         </div>
       )}
     </div>

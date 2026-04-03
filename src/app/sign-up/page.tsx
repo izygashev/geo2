@@ -68,11 +68,11 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-[#F7F6F3] px-4">
+      <Card className="w-full max-w-sm border-[#EAEAEA] bg-white shadow-none">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Создать аккаунт</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg font-bold tracking-tighter text-[#1a1a1a]">Создать аккаунт</CardTitle>
+          <CardDescription className="text-sm text-[#787774]">
             Зарегистрируйтесь, чтобы начать отслеживать упоминания бренда
           </CardDescription>
         </CardHeader>
@@ -80,7 +80,7 @@ export default function SignUpPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-md bg-[#FDEBEC] border border-[#F5C2C7] p-3 text-sm text-[#B02A37]">
                 {error}
               </div>
             )}
@@ -124,7 +124,7 @@ export default function SignUpPage() {
           </CardContent>
 
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="btn-tactile w-full rounded-md bg-[#111] text-sm font-medium text-white hover:bg-[#333]" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -135,9 +135,9 @@ export default function SignUpPage() {
               )}
             </Button>
 
-            <p className="text-center text-sm text-muted-foreground">
+            <p className="text-center text-sm text-[#787774]">
               Уже есть аккаунт?{" "}
-              <Link href="/sign-in" className="font-medium text-primary hover:underline">
+              <Link href="/sign-in" className="font-medium text-[#1a1a1a] hover:underline">
                 Войти
               </Link>
             </p>
