@@ -49,7 +49,44 @@
   - Настройка webhook URL в проекте
   - POST на URL при COMPLETED с payload отчёта
 
-## 🔵 УРОВЕНЬ 4 — Техдолг
+## � УРОВЕНЬ 3.5 — Усиление продукта
+
+- [ ] **14. Конкурентный бенчмарк**
+  - Добавление до 3 URL конкурентов к проекту (`competitorUrls Json` в Project)
+  - Worker прогоняет SoV-пайплайн по конкурентам параллельно
+  - Дашборд: side-by-side score comparison (ваш vs конкуренты)
+  - Стоимость: 25 кредитов (основной + конкуренты)
+
+- [ ] **16. Trends Dashboard — обзор всех проектов**
+  - Новая страница `/dashboard/trends`
+  - Мульти-проектный график: все проекты на одной timeline
+  - Таблица: рост/падение score за неделю/месяц
+  - Zero API cost — только SQL-агрегация
+
+- [ ] **18. Lead Magnet — бесплатный мини-аудит без регистрации**
+  - Облегчённый пайплайн: scrape + 1 SoV + базовый score (без рекомендаций)
+  - `/api/analyze/quick` — 3 запроса/день по IP
+  - Landing показывает score + 2 подсказки → CTA "Полный отчёт → зарегистрируйтесь"
+  - Себестоимость ~$0.02, zero credits
+
+- [ ] **19. White-label PDF с брендингом клиента**
+  - В настройках проекта: загрузка лого (base64/URL), выбор accent-цвета
+  - PDF генерируется с лого клиента вместо "GEO SaaS"
+  - Доступно для PRO/AGENCY планов
+
+- [ ] **21. Multi-LLM проверка SoV**
+  - Параллельная проверка через ChatGPT + Perplexity + Gemini
+  - UI: "ChatGPT ✅ / Perplexity ❌ / Gemini ✅" по каждому запросу
+  - Столбец `llmProvider` уже есть в ShareOfVoice — расширяем
+  - PRO-only фича, доп. стоимость +5 кредитов
+
+- [ ] **15. Защита от злоупотреблений (anti-abuse)**
+  - Cooldown 5 мин между отчётами одного проекта
+  - Лимит проектов по плану: FREE=3, PRO=20, AGENCY=unlimited
+  - Лимит concurrent PROCESSING: FREE=1, PRO=3, AGENCY=10
+  - Лимит scheduled reports: FREE=0, PRO=5, AGENCY=unlimited
+
+## �🔵 УРОВЕНЬ 4 — Техдолг
 
 - [ ] **11. Unit-тесты для утилит и API**
   - Vitest для `json-utils.ts`, `normalizeUrl`

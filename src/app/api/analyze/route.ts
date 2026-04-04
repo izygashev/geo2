@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractJson, repairJson, normalizeUrl } from "@/lib/json-utils";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
-// ─── Rate limit: 1 запрос в 10 секунд по IP ─────────────
+// ─── Rate limit: 1 запрос в 10 секунд + 3 в день по IP ──
 const ANALYZE_RATE_LIMIT = { maxRequests: 1, windowSeconds: 10 };
+const ANALYZE_DAILY_LIMIT = { maxRequests: 3, windowSeconds: 86400 };
 
 // ─── Типы ────────────────────────────────────────────────
 interface AnalysisResponse {
@@ -23,7 +24,7 @@ const FREE_MODELS = [
 // ─── POST /api/analyze ──────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit по IP
+    // Rate limit по IP (короткий + дневной)
     const ip = getClientIp(request.headers);
     const rl = checkRateLimit(`analyze:${ip}`, ANALYZE_RATE_LIMIT);
     if (!rl.allowed) {
@@ -35,6 +36,17 @@ export async function POST(request: NextRequest) {
             "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
           },
         }
+      );
+    }
+
+    const dailyRl = checkRateLimit(`analyze-daily:${ip}`, ANALYZE_DAILY_LIMIT);
+    if (!dailyRl.allowed) {
+      return NextResponse.json(
+        {
+          error: "Лимит бесплатных проверок исчерпан (3 в день). Зарегистрируйтесь для полного доступа.",
+          upgradeRequired: true,
+        },
+        { status: 429 }
       );
     }
 

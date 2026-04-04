@@ -8,6 +8,7 @@ import {
   Minus,
   Globe,
   ExternalLink,
+  Settings2,
 } from "lucide-react";
 import Link from "next/link";
 import { NewProjectDialog } from "@/components/new-project-dialog";
@@ -218,6 +219,15 @@ export default async function DashboardPage() {
                         Отчёт →
                       </Link>
                     )}
+
+                    {/* Project settings */}
+                    <Link
+                      href={`/dashboard/projects/${project.id}/settings`}
+                      className="rounded-md p-1.5 text-[#BBBBBB] transition-colors hover:bg-[#F7F6F3] hover:text-[#787774]"
+                      title="Настройки проекта"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                    </Link>
 
                     {/* Delete project */}
                     <DeleteButton

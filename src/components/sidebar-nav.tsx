@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileBarChart, CreditCard, Settings } from "lucide-react";
+import { LayoutDashboard, FileBarChart, TrendingUp, CreditCard, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -15,6 +15,11 @@ const navItems = [
     label: "Отчёты",
     href: "/dashboard/reports",
     icon: FileBarChart,
+  },
+  {
+    label: "Тренды",
+    href: "/dashboard/trends",
+    icon: TrendingUp,
   },
   {
     label: "Биллинг",

@@ -20,6 +20,7 @@ import { scrapeSite } from "../services/scraper.js";
 import {
   generateKeywords,
   checkShareOfVoice,
+  checkShareOfVoiceMultiLlm,
   generateRecommendations,
   type SovCheckResult,
 } from "../services/llm.js";
@@ -31,6 +32,7 @@ interface ReportJobData {
   projectId: string;
   projectUrl: string;
   userId: string;
+  multiLlm?: boolean; // Multi-LLM режим (PRO/AGENCY)
 }
 
 // ─── Prisma (отдельный инстанс для Worker-процесса) ──────
@@ -56,7 +58,7 @@ const redisConnection = parseRedisUrl(
 
 // ─── Обработчик задачи ──────────────────────────────────
 async function processReport(job: Job<ReportJobData>): Promise<void> {
-  const { reportId, projectId, projectUrl, userId } = job.data;
+  const { reportId, projectId, projectUrl, userId, multiLlm } = job.data;
 
   console.log(`\n${"═".repeat(60)}`);
   console.log(`[Worker] 🚀 Начинаю обработку отчёта ${reportId}`);
@@ -91,7 +93,7 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
     // ═══════════════════════════════════════════════════════
     // ШАГ 3: Проверка Share of Voice (Perplexity Sonar)
     // ═══════════════════════════════════════════════════════
-    console.log(`[Worker] ── Шаг 3/4: Проверка Share of Voice ──`);
+    console.log(`[Worker] ── Шаг 3/4: Проверка Share of Voice${multiLlm ? " (Multi-LLM)" : ""} ──`);
 
     // Последовательно, чтобы не перегружать API
     const sovResults: SovCheckResult[] = [];
@@ -99,8 +101,14 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
       const kw = keywords[i];
       console.log(`[Worker]    [${i + 1}/${keywords.length}] "${kw.query}"`);
 
-      const result = await checkShareOfVoice(kw.query, projectUrl);
-      sovResults.push(result);
+      if (multiLlm) {
+        // Multi-LLM: проверяем через 3 модели
+        const multiResults = await checkShareOfVoiceMultiLlm(kw.query, projectUrl);
+        sovResults.push(...multiResults);
+      } else {
+        const result = await checkShareOfVoice(kw.query, projectUrl);
+        sovResults.push(result);
+      }
 
       // Прогресс: 40% → 70% распределяем по ключевым запросам
       const progressPerKeyword = 30 / keywords.length;

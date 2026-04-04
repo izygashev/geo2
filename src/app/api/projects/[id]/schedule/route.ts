@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { getPlanLimits } from "@/lib/plan-limits";
 
 const ScheduleSchema = z.object({
   frequency: z.enum(["weekly", "monthly"]).nullable(),
@@ -41,6 +42,30 @@ export async function PATCH(
   }
 
   const { frequency } = parsed.data;
+
+  // Проверяем лимит scheduled проектов при включении расписания
+  if (frequency) {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { plan: true },
+    });
+    const limits = getPlanLimits(user?.plan ?? "FREE");
+
+    const scheduledCount = await prisma.project.count({
+      where: {
+        userId: session.user.id,
+        scheduleFrequency: { not: null },
+        id: { not: id }, // Не считаем текущий проект
+      },
+    });
+
+    if (scheduledCount >= limits.maxScheduledProjects) {
+      return NextResponse.json(
+        { error: `Лимит расписаний для вашего плана: ${limits.maxScheduledProjects}. Повысьте тариф для большего.` },
+        { status: 403 }
+      );
+    }
+  }
 
   let scheduleNextRun: Date | null = null;
   if (frequency === "weekly") {

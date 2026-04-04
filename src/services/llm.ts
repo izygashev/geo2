@@ -31,6 +31,15 @@ function getClient(): OpenAI {
 // ─── Модели ─────────────────────────────────────────────
 const CLAUDE_MODEL = "anthropic/claude-sonnet-4";
 const SONAR_MODEL = "perplexity/sonar";
+const CHATGPT_MODEL = "openai/gpt-4o-mini";
+const GEMINI_MODEL = "google/gemini-2.0-flash-001";
+
+// Multi-LLM модели для SoV-проверки
+export const MULTI_LLM_MODELS = [
+  { id: SONAR_MODEL, name: "Perplexity" },
+  { id: CHATGPT_MODEL, name: "ChatGPT" },
+  { id: GEMINI_MODEL, name: "Gemini" },
+];
 
 // Бесплатные fallback-модели (если закончились кредиты)
 const FREE_FALLBACK_MODELS = [
@@ -339,6 +348,96 @@ After providing your answer, analyze it and return JSON indicating:
       competitors: [],
     };
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 2b. Multi-LLM проверка SoV (через несколько моделей)
+// ═══════════════════════════════════════════════════════════
+export async function checkShareOfVoiceMultiLlm(
+  keyword: string,
+  siteUrl: string
+): Promise<SovCheckResult[]> {
+  console.log(`[LLM] 🔍 Multi-LLM SoV проверка: "${keyword}"`);
+
+  const results: SovCheckResult[] = [];
+
+  for (const model of MULTI_LLM_MODELS) {
+    try {
+      const domain = new URL(siteUrl).hostname.replace("www.", "");
+
+      const rawText = await callWithFallback(
+        [
+          {
+            role: "system",
+            content: `You are a helpful assistant that answers user queries. After answering, analyze your own response.
+
+Return ONLY valid JSON with this structure:
+{
+  "isMentioned": true/false,
+  "mentionContext": "brief context of how the site was mentioned, or empty string",
+  "competitors": [
+    { "name": "Competitor Name", "url": "https://example.com" }
+  ]
+}
+
+- "isMentioned" = true if you mentioned or recommended "${domain}" in your answer
+- "competitors" = other brands/products you mentioned (max 5)
+- Return valid JSON only, no markdown`,
+          },
+          {
+            role: "user",
+            content: `${keyword}
+
+After providing your answer, analyze it and return JSON indicating:
+1. Whether you mentioned or recommended ${domain} (isMentioned)
+2. List of other brands/competitors you mentioned (competitors)`,
+          },
+        ],
+        1000,
+        model.id
+      );
+
+      const jsonStr = extractJson(rawText);
+
+      try {
+        const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
+        console.log(
+          `[LLM] ${parsed.isMentioned ? "✅" : "❌"} [${model.name}] "${keyword}" → mentioned: ${parsed.isMentioned}`
+        );
+        results.push({
+          keyword,
+          llmProvider: model.name.toLowerCase(),
+          isMentioned: parsed.isMentioned,
+          mentionContext: parsed.mentionContext ?? "",
+          competitors: parsed.competitors,
+        });
+      } catch {
+        const lowerText = rawText.toLowerCase();
+        const isMentioned = lowerText.includes(domain.toLowerCase());
+        results.push({
+          keyword,
+          llmProvider: model.name.toLowerCase(),
+          isMentioned,
+          mentionContext: isMentioned ? rawText.slice(0, 200) : "",
+          competitors: [],
+        });
+      }
+    } catch (error) {
+      console.error(`[LLM] ❌ Ошибка Multi-LLM SoV [${model.name}] для "${keyword}":`, error);
+      results.push({
+        keyword,
+        llmProvider: model.name.toLowerCase(),
+        isMentioned: false,
+        mentionContext: "",
+        competitors: [],
+      });
+    }
+
+    // Пауза между моделями
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+
+  return results;
 }
 
 // ═══════════════════════════════════════════════════════════

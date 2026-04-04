@@ -3,8 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { reportQueue } from "@/lib/queue";
 import { checkRateLimit } from "@/lib/rate-limit";
-
-const REPORT_COST = 10; // Стоимость одного отчёта в кредитах
+import { getPlanLimits } from "@/lib/plan-limits";
 
 // Rate limit: 3 запроса в минуту по userId
 const REPORT_RATE_LIMIT = { maxRequests: 3, windowSeconds: 60 };
@@ -69,24 +68,80 @@ export async function POST(request: NextRequest) {
     // 3. Проверяем баланс кредитов (НЕ списываем — списание при COMPLETED)
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { credits: true },
+      select: { credits: true, plan: true },
     });
 
-    if (!user || user.credits < REPORT_COST) {
+    if (!user) {
       return NextResponse.json(
-        { error: `Недостаточно кредитов. Требуется: ${REPORT_COST}, доступно: ${user?.credits ?? 0}` },
+        { error: "Пользователь не найден" },
+        { status: 404 }
+      );
+    }
+
+    const limits = getPlanLimits(user.plan);
+
+    if (user.credits < limits.reportCost) {
+      return NextResponse.json(
+        { error: `Недостаточно кредитов. Требуется: ${limits.reportCost}, доступно: ${user.credits}` },
         { status: 402 }
       );
     }
 
-    // 4. Находим или создаём проект для этого URL
-    let project = await prisma.project.findFirst({
-      where: {
-        userId: session.user.id,
-        url: normalizedUrl,
-      },
+    // 3.5 Проверяем лимит проектов
+    const projectCount = await prisma.project.count({
+      where: { userId: session.user.id },
+    });
+
+    const existingProject = await prisma.project.findFirst({
+      where: { userId: session.user.id, url: normalizedUrl },
       select: { id: true, url: true, name: true },
     });
+
+    if (!existingProject && projectCount >= limits.maxProjects) {
+      return NextResponse.json(
+        { error: `Лимит проектов для вашего плана: ${limits.maxProjects}. Удалите неиспользуемые проекты или повысьте тариф.` },
+        { status: 403 }
+      );
+    }
+
+    // 3.6 Проверяем concurrent PROCESSING отчётов
+    const processingCount = await prisma.report.count({
+      where: {
+        project: { userId: session.user.id },
+        status: "PROCESSING",
+      },
+    });
+
+    if (processingCount >= limits.maxConcurrentReports) {
+      return NextResponse.json(
+        { error: `Вы уже обрабатываете ${processingCount} отчёт(ов). Дождитесь завершения.` },
+        { status: 429 }
+      );
+    }
+
+    // 3.7 Cooldown для проекта — нельзя спамить rerun
+    if (existingProject) {
+      const recentReport = await prisma.report.findFirst({
+        where: {
+          projectId: existingProject.id,
+          createdAt: {
+            gte: new Date(Date.now() - limits.projectCooldownSeconds * 1000),
+          },
+        },
+        select: { id: true },
+      });
+
+      if (recentReport) {
+        const minutes = Math.ceil(limits.projectCooldownSeconds / 60);
+        return NextResponse.json(
+          { error: `Подождите ${minutes} мин. между отчётами для одного проекта.` },
+          { status: 429 }
+        );
+      }
+    }
+
+    // 4. Находим или создаём проект для этого URL
+    let project = existingProject;
 
     if (!project) {
       project = await prisma.project.create({
@@ -115,6 +170,7 @@ export async function POST(request: NextRequest) {
         projectId: project.id,
         projectUrl: project.url,
         userId: session.user.id,
+        multiLlm: limits.multiLlm,
       },
       {
         jobId: report.id,

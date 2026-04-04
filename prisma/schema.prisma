@@ -74,6 +74,13 @@ model Project {
   // Webhook URL для уведомлений (Zapier, Make, etc.)
   webhookUrl        String?
 
+  // White-label настройки (PRO/AGENCY)
+  brandLogoUrl      String?   // URL или base64 лого клиента
+  brandAccentColor  String?   // HEX цвет акцента, напр. "#2D6A4F"
+
+  // Конкурентный бенчмарк (PRO/AGENCY)
+  competitorUrls    Json      @default("[]") // Массив URL конкурентов (до 3)
+
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   reports Report[]
 
