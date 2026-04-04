@@ -22,6 +22,9 @@ import { SovDonutChart, SovBarChart } from "@/components/sov-charts";
 import { ScoreRing, ScoreBreakdownBar } from "@/components/score-ring";
 import { SiteChecklist } from "@/components/site-checklist";
 import { CompetitorsTable } from "@/components/competitors-table";
+import { ReportPdfButton } from "@/components/report-pdf-button";
+import { RerunReportButton } from "@/components/rerun-report-button";
+import { ScoreHistoryChart } from "@/components/score-history-chart";
 
 export default async function ReportPage({
   params,
@@ -49,6 +52,27 @@ export default async function ReportPage({
   if (!report || report.project.userId !== session.user.id) {
     redirect("/dashboard");
   }
+
+  // История Score по проекту (для тренд-графика)
+  const scoreHistory = await prisma.report.findMany({
+    where: {
+      projectId: report.projectId,
+      status: "COMPLETED",
+      overallScore: { not: null },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      overallScore: true,
+      createdAt: true,
+    },
+  });
+
+  const historyData = scoreHistory.map((r) => ({
+    date: r.createdAt.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }),
+    score: Math.round(r.overallScore!),
+    reportId: r.id,
+  }));
 
   // Compute metrics
   const sovTotal = report.shareOfVoices.length;
@@ -128,6 +152,13 @@ export default async function ReportPage({
               </span>
             </div>
           </div>
+          {/* Action buttons */}
+          {report.status === "COMPLETED" && (
+            <div className="flex items-center gap-2" data-pdf-hide>
+              <RerunReportButton projectUrl={report.project.url} />
+              <ReportPdfButton reportId={report.id} projectName={report.project.name} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -165,7 +196,12 @@ export default async function ReportPage({
 
       {/* COMPLETED state */}
       {report.status === "COMPLETED" && (
-        <div className="space-y-6">
+        <div id="report-content" className="space-y-6">
+
+          {/* Score History Trend (показываем если > 1 отчёта) */}
+          {historyData.length > 1 && (
+            <ScoreHistoryChart data={historyData} />
+          )}
 
           {/* ROW 1: Score Ring + Score Breakdown + Quick Stats */}
           <div className="grid gap-4 lg:grid-cols-12">
