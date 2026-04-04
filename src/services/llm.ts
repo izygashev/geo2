@@ -63,6 +63,13 @@ const SovResultSchema = z.object({
 
 const RecommendationsSchema = z.object({
   overallScore: z.number().min(0).max(100),
+  scoreBreakdown: z.object({
+    sov: z.number().min(0).max(100),
+    schema: z.number().min(0).max(100),
+    llmsTxt: z.number().min(0).max(100),
+    content: z.number().min(0).max(100),
+    authority: z.number().min(0).max(100),
+  }),
   recommendations: z.array(
     z.object({
       type: z.string(),
@@ -83,6 +90,7 @@ export interface SovCheckResult {
   keyword: string;
   llmProvider: string;
   isMentioned: boolean;
+  mentionContext: string;
   competitors: { name: string; url?: string }[];
 }
 
@@ -95,6 +103,13 @@ export interface RecommendationItem {
 
 export interface AnalysisResult {
   overallScore: number;
+  scoreBreakdown: {
+    sov: number;
+    schema: number;
+    llmsTxt: number;
+    content: number;
+    authority: number;
+  };
   recommendations: RecommendationItem[];
 }
 
@@ -304,6 +319,7 @@ After providing your answer, analyze it and return JSON indicating:
         keyword,
         llmProvider: "perplexity-sonar",
         isMentioned: parsed.isMentioned,
+        mentionContext: parsed.mentionContext ?? "",
         competitors: parsed.competitors,
       };
     } catch {
@@ -319,6 +335,7 @@ After providing your answer, analyze it and return JSON indicating:
         keyword,
         llmProvider: "perplexity-sonar",
         isMentioned,
+        mentionContext: isMentioned ? rawText.slice(0, 200) : "",
         competitors: [],
       };
     }
@@ -328,6 +345,7 @@ After providing your answer, analyze it and return JSON indicating:
       keyword,
       llmProvider: "perplexity-sonar",
       isMentioned: false,
+      mentionContext: "",
       competitors: [],
     };
   }
@@ -379,25 +397,34 @@ ${sovResults.map((r) => `  - "${r.keyword}": ${r.isMentioned ? "✅ mentioned" :
 Return JSON in this exact format:
 {
   "overallScore": 65,
+  "scoreBreakdown": {
+    "sov": 40,
+    "schema": 70,
+    "llmsTxt": 0,
+    "content": 60,
+    "authority": 55
+  },
   "recommendations": [
     {
       "type": "schema-org",
       "title": "Add FAQ Schema markup",
       "description": "Adding FAQ structured data helps AI assistants find and cite your answers directly.",
       "generatedCode": "<script type=\\"application/ld+json\\">...</script>"
-    },
-    {
-      "type": "content",
-      "title": "Create an AI-friendly /llms.txt file",
-      "description": "...",
-      "generatedCode": "# Company Name\\n> Brief description..."
     }
   ]
 }
 
+scoreBreakdown rules (each 0-100):
+- sov: based on mention ratio (${mentionedCount}/${totalChecks})
+- schema: 0 if no Schema.org, 50-100 based on richness
+- llmsTxt: 0 if missing, 80-100 if present
+- content: based on content quality, length, clarity
+- authority: estimated brand authority for AI citations
+
 Recommendation types: "schema-org", "content", "technical", "llms-txt", "authority", "competitors".
-Generate 4-7 specific, actionable recommendations with real code examples where applicable.
-The overallScore should reflect: SoV ratio, schema.org presence, llms.txt presence, content quality.`;
+Generate 4-7 specific, actionable recommendations in Russian with real code examples where applicable.
+All recommendation titles and descriptions must be in Russian.
+The overallScore should be a weighted average of scoreBreakdown components.`;
 
     const rawText = await callWithFallback(
       [
@@ -419,11 +446,23 @@ The overallScore should reflect: SoV ratio, schema.org presence, llms.txt presen
     console.error("[LLM] ❌ Ошибка генерации рекомендаций:", error);
 
     // Fallback: базовый скоринг и рекомендации
-    const baseScore = Math.round((mentionedCount / Math.max(totalChecks, 1)) * 50);
-    const schemaBonus = siteData.schemaOrgTypes.length > 0 ? 15 : 0;
-    const llmsBonus = siteData.hasLlmsTxt ? 20 : 0;
-    const contentBonus = siteData.bodyText.length > 500 ? 10 : 0;
-    const fallbackScore = Math.min(baseScore + schemaBonus + llmsBonus + contentBonus, 100);
+    const sovPct = Math.round((mentionedCount / Math.max(totalChecks, 1)) * 100);
+    const schemaPct = siteData.schemaOrgTypes.length > 0 ? 60 : 0;
+    const llmsPct = siteData.hasLlmsTxt ? 80 : 0;
+    const contentPct = siteData.bodyText.length > 1000 ? 60 : siteData.bodyText.length > 500 ? 40 : 15;
+    const authorityPct = sovPct > 50 ? 50 : sovPct > 0 ? 30 : 10;
+    const fallbackScore = Math.min(
+      Math.round(sovPct * 0.3 + schemaPct * 0.2 + llmsPct * 0.15 + contentPct * 0.2 + authorityPct * 0.15),
+      100
+    );
+
+    const fallbackBreakdown = {
+      sov: sovPct,
+      schema: schemaPct,
+      llmsTxt: llmsPct,
+      content: contentPct,
+      authority: authorityPct,
+    };
 
     const fallbackRecs: RecommendationItem[] = [];
 
@@ -459,6 +498,7 @@ The overallScore should reflect: SoV ratio, schema.org presence, llms.txt presen
 
     return {
       overallScore: fallbackScore,
+      scoreBreakdown: fallbackBreakdown,
       recommendations: fallbackRecs,
     };
   }

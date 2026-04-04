@@ -145,12 +145,25 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
     }
 
     await prisma.$transaction(async (tx) => {
-      // Обновляем статус отчёта и score
+      // Обновляем статус отчёта, score и метаданные сайта
       await tx.report.update({
         where: { id: reportId },
         data: {
           status: "COMPLETED",
           overallScore: analysis.overallScore,
+          // Site metadata
+          siteTitle: siteData.title,
+          siteDescription: siteData.description,
+          siteH1: siteData.h1,
+          hasLlmsTxt: siteData.hasLlmsTxt,
+          schemaOrgTypes: siteData.schemaOrgTypes,
+          contentLength: siteData.bodyText.length,
+          // Score breakdown
+          scoreSov: analysis.scoreBreakdown.sov,
+          scoreSchema: analysis.scoreBreakdown.schema,
+          scoreLlmsTxt: analysis.scoreBreakdown.llmsTxt,
+          scoreContent: analysis.scoreBreakdown.content,
+          scoreAuthority: analysis.scoreBreakdown.authority,
         },
       });
 
@@ -162,6 +175,7 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
             llmProvider: sov.llmProvider,
             keyword: sov.keyword,
             isMentioned: sov.isMentioned,
+            mentionContext: sov.mentionContext || "",
             competitors: sov.competitors,
           })),
         });

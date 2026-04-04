@@ -81,6 +81,21 @@ model Report {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  // ─── Site metadata (из scraper) ─────────────────────
+  siteTitle       String?
+  siteDescription String?  @db.Text
+  siteH1          String?
+  hasLlmsTxt      Boolean  @default(false)
+  schemaOrgTypes  Json     @default("[]")
+  contentLength   Int      @default(0)
+
+  // ─── Score breakdown ────────────────────────────────
+  scoreSov        Float?   // Компонент score за Share of Voice
+  scoreSchema     Float?   // Компонент score за Schema.org
+  scoreLlmsTxt    Float?   // Компонент score за llms.txt
+  scoreContent    Float?   // Компонент score за контент
+  scoreAuthority  Float?   // Компонент score за авторитет бренда
+
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   shareOfVoices   ShareOfVoice[]
   recommendations Recommendation[]
@@ -89,12 +104,13 @@ model Report {
 }
 
 model ShareOfVoice {
-  id          String  @id @default(uuid())
-  reportId    String
-  llmProvider String
-  keyword     String
-  isMentioned Boolean
-  competitors Json
+  id             String  @id @default(uuid())
+  reportId       String
+  llmProvider    String
+  keyword        String
+  isMentioned    Boolean
+  mentionContext String  @default("") @db.Text
+  competitors    Json
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
