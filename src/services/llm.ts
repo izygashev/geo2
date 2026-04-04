@@ -9,6 +9,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import type { SiteData } from "./scraper.js";
+import { extractJson } from "../lib/json-utils.js";
 
 // ─── OpenRouter Client (lazy init — ждём загрузки .env) ──
 let _openrouter: OpenAI | null = null;
@@ -111,17 +112,6 @@ export interface AnalysisResult {
     authority: number;
   };
   recommendations: RecommendationItem[];
-}
-
-// ─── Утилита: парсинг JSON из ответа LLM ───────────────
-function extractJson(text: string): string {
-  // Убираем markdown code fence если есть
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  // Ищем первый { ... } или [ ... ]
-  const braceMatch = text.match(/\{[\s\S]*\}/);
-  if (braceMatch) return braceMatch[0];
-  return text.trim();
 }
 
 // ─── Утилита: вызов LLM с fallback на бесплатные модели при 402 ───

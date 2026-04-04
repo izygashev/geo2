@@ -69,7 +69,7 @@ export default async function ReportsPage() {
               <div className="flex items-center gap-4">
                 {report.overallScore !== null && (
                   <span className="text-base font-bold tracking-tighter text-[#1a1a1a]">
-                    {report.overallScore}
+                    {Math.round(report.overallScore)}
                     <span className="text-sm text-[#BBBBBB]">/100</span>
                   </span>
                 )}

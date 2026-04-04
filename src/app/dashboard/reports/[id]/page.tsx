@@ -185,12 +185,9 @@ export default async function ReportPage({
           <p className="text-sm text-[#787774]">
             Кредиты не списаны. Попробуйте запустить анализ ещё раз.
           </p>
-          <Link
-            href="/"
-            className="mt-2 inline-flex items-center gap-2 rounded-md border border-[#F5C2C7] bg-[#FDEBEC] px-4 py-2 text-sm font-medium text-[#B02A37] hover:bg-[#FBD5D8] transition-colors"
-          >
-            Запустить заново
-          </Link>
+          <div className="mt-2">
+            <RerunReportButton projectUrl={report.project.url} />
+          </div>
         </div>
       )}
 

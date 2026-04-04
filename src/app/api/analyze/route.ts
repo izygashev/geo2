@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractJson, repairJson, normalizeUrl } from "@/lib/json-utils";
 
 // ─── Типы ────────────────────────────────────────────────
-interface AnalyzeBody {
-  url: string;
-}
-
 interface AnalysisResponse {
   summary: string;
   pros: string[];
@@ -19,50 +16,6 @@ const FREE_MODELS = [
   "qwen/qwen3-4b:free",
 ];
 
-// ─── Утилита: извлечение JSON из ответа LLM ─────────────
-function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  const braceMatch = text.match(/\{[\s\S]*\}/);
-  if (braceMatch) return braceMatch[0];
-  return text.trim();
-}
-
-// ─── Утилита: починка обрезанного JSON ───────────────────
-function repairJson(raw: string): string {
-  let s = raw.trim();
-  // Считаем незакрытые скобки
-  let braces = 0;
-  let brackets = 0;
-  let inString = false;
-  let escaped = false;
-  for (const ch of s) {
-    if (escaped) { escaped = false; continue; }
-    if (ch === "\\") { escaped = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === "{") braces++;
-    if (ch === "}") braces--;
-    if (ch === "[") brackets++;
-    if (ch === "]") brackets--;
-  }
-  // Если строка не закрыта
-  if (inString) s += '"';
-  // Закрываем массивы и объекты
-  while (brackets > 0) { s += "]"; brackets--; }
-  while (braces > 0) { s += "}"; braces--; }
-  return s;
-}
-
-// ─── Нормализация URL ────────────────────────────────────
-function normalizeUrl(raw: string): string {
-  let url = raw.trim();
-  if (!/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
-  }
-  return url;
-}
-
 // ─── POST /api/analyze ──────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
@@ -74,7 +27,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = (await request.json()) as AnalyzeBody;
+    const body = (await request.json()) as { url?: string };
     if (!body.url || body.url.trim().length < 3) {
       return NextResponse.json(
         { error: "Введите корректный URL" },

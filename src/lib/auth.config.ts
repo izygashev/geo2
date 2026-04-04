@@ -32,22 +32,5 @@ export const authConfig: NextAuthConfig = {
       }
       return session;
     },
-    authorized({ auth, request: { nextUrl } }) {
-      const isLoggedIn = !!auth?.user;
-      const publicRoutes = ["/", "/sign-in", "/sign-up"];
-      const isPublicRoute = publicRoutes.includes(nextUrl.pathname);
-      const isAuthApi = nextUrl.pathname.startsWith("/api/auth");
-      const isReportsStartApi = nextUrl.pathname === "/api/reports/start";
-
-      if (isPublicRoute || isAuthApi || isReportsStartApi) {
-        return true;
-      }
-
-      if (!isLoggedIn) {
-        return false; // Redirect to signIn page
-      }
-
-      return true;
-    },
   },
 };
