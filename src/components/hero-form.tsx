@@ -143,12 +143,12 @@ export function HeroForm({ isAuthenticated }: HeroFormProps) {
   return (
     <div className="flex w-full flex-col gap-4">
       <form onSubmit={handleSubmit} className="w-full">
-        {/* Compact monolithic input+button — taste-skill: single border, h-12, no shadows */}
-        <div className="relative flex h-12 items-center rounded-lg border border-[#EAEAEA] bg-white transition-colors focus-within:border-[#CCCCCC]">
+        {/* Wide prominent input+button — centered hero style */}
+        <div className="relative flex h-14 items-center rounded-xl border border-[#EAEAEA] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all focus-within:border-[#CCCCCC] focus-within:shadow-[0_4px_20px_rgba(0,0,0,0.06)] sm:h-16">
           {/* Typewriter placeholder overlay */}
           {showPlaceholder && (
             <div
-              className="pointer-events-none absolute inset-0 flex items-center px-4 text-sm"
+              className="pointer-events-none absolute inset-0 flex items-center px-5 text-sm text-[#BBBBBB] sm:text-base"
               aria-hidden="true"
             >
               <TypewriterText />
@@ -162,37 +162,37 @@ export function HeroForm({ isAuthenticated }: HeroFormProps) {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={isLoading || !!activeReportId}
-            className="h-full w-full bg-transparent pl-4 pr-24 text-sm text-[#1a1a1a] placeholder:text-transparent focus:outline-none disabled:opacity-50"
+            className="h-full w-full bg-transparent pl-5 pr-28 text-sm text-[#1a1a1a] placeholder:text-transparent focus:outline-none disabled:opacity-50 sm:text-base sm:pr-32"
           />
 
           {/* Submit button — inside the border */}
           <button
             type="submit"
             disabled={isLoading || !url.trim() || !!activeReportId}
-            className="btn-tactile absolute right-1.5 flex h-8 items-center gap-1.5 rounded-md bg-[#111] px-3.5 text-xs font-medium text-white transition-colors hover:bg-[#333] disabled:bg-[#EAEAEA] disabled:text-[#BBBBBB]"
+            className="btn-tactile absolute right-2 flex h-10 items-center gap-2 rounded-lg bg-[#1a1a1a] px-5 text-sm font-medium text-white transition-colors hover:bg-[#333] disabled:bg-[#EAEAEA] disabled:text-[#BBBBBB] sm:h-11 sm:px-6"
           >
             {isLoading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
                 Анализ
-                <ArrowRight className="h-3 w-3" />
+                <ArrowRight className="h-3.5 w-3.5" />
               </>
             )}
           </button>
         </div>
 
         {isLoading && (
-          <div className="flex items-center gap-2 pt-1">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#F0EFEB]">
+          <div className="flex items-center gap-2 pt-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#F0EFEB]">
               <div className="h-full w-1/2 animate-pulse rounded-full bg-[#CCCCCC]" />
             </div>
-            <span className="text-[10px] text-[#BBBBBB]">Анализируем…</span>
+            <span className="text-xs text-[#BBBBBB]">Анализируем…</span>
           </div>
         )}
 
         {!isAuthenticated && !isLoading && !analysisResult && (
-          <p className="mt-2 text-xs text-[#BBBBBB]">
+          <p className="mt-3 text-center text-xs text-[#BBBBBB]">
             Попробуйте бесплатно — регистрация не нужна
           </p>
         )}

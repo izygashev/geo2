@@ -8,6 +8,8 @@ import {
   Check,
   ArrowRight,
   Search,
+  Zap,
+  Clock,
 } from "lucide-react";
 import { HeroForm } from "@/components/hero-form";
 import { FaqAccordion } from "@/components/faq-accordion";
@@ -20,20 +22,37 @@ export default async function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F6F3] text-[#1a1a1a]">
       {/* ─── Navigation ─── */}
-      <nav className="sticky top-0 z-50 border-b border-[#EAEAEA] bg-[#F7F6F3]/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-[#787774]" />
-            <span className="text-sm font-semibold tracking-tight">
-              GEO SaaS
+      <nav className="sticky top-0 z-50 border-b border-[#EAEAEA]/60 bg-[#F7F6F3]/70 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1a1a1a]">
+              <Globe className="h-4 w-4 text-white" />
+            </div>
+            <span className="text-base font-bold tracking-tight">
+              Geo SaaS
             </span>
           </Link>
 
+          {/* Center nav links — desktop only */}
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#features" className="text-sm font-medium text-[#555] transition-colors hover:text-[#1a1a1a]">
+              Продукт
+            </a>
+            <a href="#pricing" className="text-sm font-medium text-[#555] transition-colors hover:text-[#1a1a1a]">
+              Решения
+            </a>
+            <a href="#pricing" className="text-sm font-medium text-[#555] transition-colors hover:text-[#1a1a1a]">
+              Цены
+            </a>
+          </div>
+
+          {/* Right actions */}
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <Link
                 href="/dashboard"
-                className="btn-tactile rounded-md bg-[#111] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#333]"
+                className="btn-tactile rounded-lg bg-[#1a1a1a] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#333]"
               >
                 Дашборд
               </Link>
@@ -41,15 +60,15 @@ export default async function HomePage() {
               <>
                 <Link
                   href="/sign-in"
-                  className="text-sm text-[#787774] transition-colors hover:text-[#1a1a1a]"
+                  className="hidden sm:inline-flex text-sm font-medium text-[#555] transition-colors hover:text-[#1a1a1a]"
                 >
-                  Войти
+                  Вход
                 </Link>
                 <Link
                   href="/sign-up"
-                  className="btn-tactile rounded-md bg-[#111] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#333]"
+                  className="btn-tactile rounded-lg bg-[#1a1a1a] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#333]"
                 >
-                  Начать бесплатно
+                  Попробовать бесплатно
                 </Link>
               </>
             )}
@@ -57,81 +76,46 @@ export default async function HomePage() {
         </div>
       </nav>
 
-      {/* ─── Hero — asymmetric split layout (taste-skill: DESIGN_VARIANCE 8) ─── */}
-      <section className="relative min-h-[100dvh] flex items-center">
-        {/* Ambient warm blob — fixed, pointer-events-none */}
-        <div className="pointer-events-none fixed inset-0 -z-10">
-          <div className="absolute left-[-10%] top-[10%] h-[500px] w-[600px] rounded-full bg-gradient-to-br from-[#F0E6D6]/40 via-transparent to-transparent blur-[120px] opacity-[0.04]" />
-        </div>
+      {/* ─── Hero — centered fullscreen with 3D-inspired background ─── */}
+      <section className="relative flex min-h-[calc(100dvh-64px)] items-center justify-center overflow-hidden">
+        {/* 3D geometric shapes — background image */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/back.png"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover object-center"
+        />
 
-        <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 py-24 lg:grid-cols-[1.2fr_1fr] lg:gap-20 lg:py-32">
-          {/* Left — text content */}
-          <div className="flex flex-col justify-center">
-            <p className="mb-6 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-              AI Visibility Platform
-            </p>
-            <h1 className="font-sans text-4xl font-bold leading-none tracking-tighter md:text-6xl">
-              Узнайте, что ИИ
-              <br />
-              <span className="text-[#787774]">думает о вашем бренде</span>
-            </h1>
-            <p className="mt-6 max-w-[50ch] text-base leading-relaxed text-[#787774]">
-              Анализируем, как ChatGPT, Perplexity и Claude упоминают вашу
-              компанию. Стратегия оптимизации для AI-поисковиков.
-            </p>
+        {/* Content — centered */}
+        <div className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-6 py-20 text-center">
+          <h1 className="font-sans text-[2.75rem] font-extrabold leading-[1.1] tracking-tighter sm:text-5xl md:text-[3.5rem] lg:text-[4rem]">
+            Узнайте, рекомендует
+            <br />
+            ли ИИ <span className="text-[#787774]">[ваш бренд]</span>
+          </h1>
 
-            {/* CTA — compact input */}
-            <div className="mt-10 max-w-lg">
-              <HeroForm isAuthenticated={isAuthenticated} />
-            </div>
+          <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-[#787774] sm:text-lg">
+            Анализируем, как ChatGPT, Gemini и Claude воспринимают
+            <br className="hidden sm:block" />
+            и рекомендуют вашу компанию. Узнайте свой Geo Score сегодня.
+          </p>
 
-            {/* Suggestion chips */}
-            <div className="mt-6 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#BBBBBB]">
-                Попробуйте:
-              </span>
-              {["apple.com", "ozon.ru", "tinkoff.ru"].map((site) => (
-                <span
-                  key={site}
-                  className="cursor-default rounded-md border border-[#EAEAEA] bg-white px-2.5 py-1 text-xs text-[#787774] transition-colors hover:border-[#D5D5D5]"
-                >
-                  {site}
-                </span>
-              ))}
-            </div>
+          {/* CTA — wide centered input */}
+          <div className="mt-10 w-full max-w-xl">
+            <HeroForm isAuthenticated={isAuthenticated} />
           </div>
 
-          {/* Right — visual metric placeholder */}
-          <div className="hidden lg:flex items-center justify-center">
-            <div className="relative w-full max-w-sm rounded-xl border border-[#EAEAEA] bg-white p-8">
-              {/* Fake dashboard card */}
-              <div className="mb-6 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
-                <Search className="h-3.5 w-3.5" />
-                AI Visibility Score
-              </div>
-              <div className="text-5xl font-bold tracking-tighter text-[#1a1a1a]">
-                74<span className="text-xl text-[#CCCCCC]">/100</span>
-              </div>
-              <div className="mt-6 space-y-3">
-                {[
-                  { label: "ChatGPT", w: "w-[85%]" },
-                  { label: "Perplexity", w: "w-[62%]" },
-                  { label: "Claude", w: "w-[48%]" },
-                ].map((bar) => (
-                  <div key={bar.label}>
-                    <div className="mb-1 flex justify-between text-xs text-[#787774]">
-                      <span>{bar.label}</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-[#F0EFEB]">
-                      <div className={`h-full rounded-full bg-[#1a1a1a] ${bar.w}`} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 border-t border-[#EAEAEA] pt-4 text-xs text-[#BBBBBB]">
-                Обновлено 2 минуты назад
-              </div>
-            </div>
+          {/* Bottom badges */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-[#787774]">
+            <span className="flex items-center gap-1.5">
+              <Zap className="h-4 w-4 text-[#BBBBBB]" />
+              50 бесплатных кредитов
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-[#BBBBBB]" />
+              Анализ за 2 минуты
+            </span>
           </div>
         </div>
       </section>
@@ -181,7 +165,7 @@ export default async function HomePage() {
       </section>
 
       {/* ─── Features — asymmetric bento grid ─── */}
-      <section className="py-24 lg:py-32">
+      <section id="features" className="py-24 lg:py-32">
         <div className="mx-auto max-w-5xl px-6">
           <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
             Возможности
@@ -234,7 +218,7 @@ export default async function HomePage() {
       </section>
 
       {/* ─── Pricing ─── */}
-      <section className="border-t border-[#EAEAEA] py-24 lg:py-32">
+      <section id="pricing" className="border-t border-[#EAEAEA] py-24 lg:py-32">
         <div className="mx-auto max-w-5xl px-6">
           <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
             Тарифы

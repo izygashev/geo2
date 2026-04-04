@@ -86,16 +86,4 @@
   - Лимит concurrent PROCESSING: FREE=1, PRO=3, AGENCY=10
   - Лимит scheduled reports: FREE=0, PRO=5, AGENCY=unlimited
 
-## �🔵 УРОВЕНЬ 4 — Техдолг
 
-- [ ] **11. Unit-тесты для утилит и API**
-  - Vitest для `json-utils.ts`, `normalizeUrl`
-  - Тесты API-роутов
-
-- [ ] **12. Error tracking (Sentry)**
-  - `@sentry/nextjs` + DSN
-  - Capture exceptions в API-роутах и worker
-
-- [ ] **13. CI/CD (GitHub Actions)**
-  - lint → build → test → deploy
-  - Автоматический запуск при push в master
