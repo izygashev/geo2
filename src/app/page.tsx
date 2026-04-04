@@ -81,7 +81,7 @@ export default async function HomePage() {
         {/* 3D geometric shapes — background image */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/back.png"
+          src="/back2.png"
           alt=""
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover object-center"
