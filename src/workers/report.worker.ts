@@ -23,6 +23,7 @@ import {
   generateRecommendations,
   type SovCheckResult,
 } from "../services/llm.js";
+import { sendReportReadyEmail } from "../lib/email.js";
 
 // ─── Типы ────────────────────────────────────────────────
 interface ReportJobData {
@@ -205,6 +206,33 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
 
     await job.updateProgress(100);
 
+    // ═══════════════════════════════════════════════════════
+    // Email-уведомление
+    // ═══════════════════════════════════════════════════════
+    try {
+      const userWithProject = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true },
+      });
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { name: true },
+      });
+      if (userWithProject?.email) {
+        const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+        await sendReportReadyEmail({
+          to: userWithProject.email,
+          userName: userWithProject.name ?? "Пользователь",
+          projectName: project?.name ?? projectUrl,
+          reportUrl: `${baseUrl}/dashboard/reports/${reportId}`,
+          score: analysis.overallScore,
+          status: "COMPLETED",
+        });
+      }
+    } catch (emailErr) {
+      console.error("[Worker] ⚠️ Не удалось отправить email:", emailErr);
+    }
+
     console.log(`\n${"─".repeat(60)}`);
     console.log(`[Worker] ✅ Отчёт ${reportId} ЗАВЕРШЁН`);
     console.log(`[Worker]    Score: ${analysis.overallScore}`);
@@ -222,6 +250,31 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
       });
     } catch (dbError) {
       console.error(`[Worker] ❌ Не удалось обновить статус на FAILED:`, dbError);
+    }
+
+    // Email-уведомление об ошибке
+    try {
+      const userForFail = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true },
+      });
+      const projectForFail = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { name: true },
+      });
+      if (userForFail?.email) {
+        const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+        await sendReportReadyEmail({
+          to: userForFail.email,
+          userName: userForFail.name ?? "Пользователь",
+          projectName: projectForFail?.name ?? projectUrl,
+          reportUrl: `${baseUrl}/dashboard/reports/${reportId}`,
+          score: null,
+          status: "FAILED",
+        });
+      }
+    } catch (emailErr) {
+      console.error("[Worker] ⚠️ Не удалось отправить fail-email:", emailErr);
     }
 
     throw error; // Пробрасываем, чтобы BullMQ сделал retry

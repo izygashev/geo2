@@ -31,6 +31,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Пропускаем публичные отчёты /r/[shareId]
+  if (pathname.startsWith("/r/")) {
+    return NextResponse.next();
+  }
+
   // Проверяем JWT токен
   const token = await getToken({
     req: request,

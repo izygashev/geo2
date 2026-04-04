@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractJson, repairJson, normalizeUrl } from "@/lib/json-utils";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+
+// ─── Rate limit: 1 запрос в 10 секунд по IP ─────────────
+const ANALYZE_RATE_LIMIT = { maxRequests: 1, windowSeconds: 10 };
 
 // ─── Типы ────────────────────────────────────────────────
 interface AnalysisResponse {
@@ -19,6 +23,21 @@ const FREE_MODELS = [
 // ─── POST /api/analyze ──────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit по IP
+    const ip = getClientIp(request.headers);
+    const rl = checkRateLimit(`analyze:${ip}`, ANALYZE_RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Слишком много запросов. Подождите 10 секунд." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          },
+        }
+      );
+    }
+
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       return NextResponse.json(

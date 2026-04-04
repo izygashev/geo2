@@ -3,15 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import {
   FolderOpen,
-  Plus,
   TrendingUp,
   TrendingDown,
   Minus,
   Globe,
   ExternalLink,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { NewProjectDialog } from "@/components/new-project-dialog";
+import { DeleteButton } from "@/components/delete-button";
+import { ScheduleSelector } from "@/components/schedule-selector";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -64,10 +65,7 @@ export default async function DashboardPage() {
             Управляйте сайтами и запускайте аналитику
           </p>
         </div>
-        <Button className="btn-tactile gap-2 rounded-md bg-[#111] text-sm font-medium text-white hover:bg-[#333]">
-          <Plus className="h-4 w-4" />
-          Новый проект
-        </Button>
+        <NewProjectDialog />
       </div>
 
       {/* Сводная статистика (если есть проекты) */}
@@ -110,10 +108,7 @@ export default async function DashboardPage() {
             Создайте первый проект, чтобы начать отслеживать упоминания вашего
             бренда в ответах ИИ.
           </p>
-          <Button className="btn-tactile mt-6 gap-2 rounded-md bg-[#111] text-sm font-medium text-white hover:bg-[#333]">
-            <Plus className="h-4 w-4" />
-            Создать проект
-          </Button>
+          <NewProjectDialog label="Создать проект" variant="outline" />
         </div>
       ) : (
         <div className="space-y-2">
@@ -167,6 +162,12 @@ export default async function DashboardPage() {
                         </span>
                       )}
                     </div>
+                    <div className="mt-2">
+                      <ScheduleSelector
+                        projectId={project.id}
+                        currentFrequency={project.scheduleFrequency}
+                      />
+                    </div>
                   </div>
 
                   {/* Score + Trend */}
@@ -217,6 +218,13 @@ export default async function DashboardPage() {
                         Отчёт →
                       </Link>
                     )}
+
+                    {/* Delete project */}
+                    <DeleteButton
+                      entityType="project"
+                      entityId={project.id}
+                      entityName={project.name}
+                    />
                   </div>
                 </div>
               </div>

@@ -14,6 +14,7 @@ import {
   Zap,
   Users,
   BarChart3,
+  ArrowRightLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,8 @@ import { CompetitorsTable } from "@/components/competitors-table";
 import { ReportPdfButton } from "@/components/report-pdf-button";
 import { RerunReportButton } from "@/components/rerun-report-button";
 import { ScoreHistoryChart } from "@/components/score-history-chart";
+import { ShareReportButton } from "@/components/share-report-button";
+import { DeleteButton } from "@/components/delete-button";
 
 export default async function ReportPage({
   params,
@@ -73,6 +76,10 @@ export default async function ReportPage({
     score: Math.round(r.overallScore!),
     reportId: r.id,
   }));
+
+  // Найдём предыдущий отчёт по этому проекту для кнопки "Сравнить"
+  const currentIdx = scoreHistory.findIndex((r) => r.id === report.id);
+  const prevReport = currentIdx > 0 ? scoreHistory[currentIdx - 1] : null;
 
   // Compute metrics
   const sovTotal = report.shareOfVoices.length;
@@ -155,8 +162,25 @@ export default async function ReportPage({
           {/* Action buttons */}
           {report.status === "COMPLETED" && (
             <div className="flex items-center gap-2" data-pdf-hide>
+              {prevReport && (
+                <Link
+                  href={`/dashboard/reports/diff?a=${prevReport.id}&b=${report.id}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#EAEAEA] bg-white px-3 text-xs font-medium text-[#787774] transition-colors hover:bg-[#F7F6F3] hover:text-[#1a1a1a]"
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  Сравнить
+                </Link>
+              )}
+              <ShareReportButton reportId={report.id} existingShareId={report.shareId} />
               <RerunReportButton projectUrl={report.project.url} />
               <ReportPdfButton reportId={report.id} projectName={report.project.name} />
+              <DeleteButton
+                entityType="report"
+                entityId={report.id}
+                entityName={report.project.name}
+                variant="icon"
+                redirectTo="/dashboard/reports"
+              />
             </div>
           )}
         </div>
@@ -185,8 +209,15 @@ export default async function ReportPage({
           <p className="text-sm text-[#787774]">
             Кредиты не списаны. Попробуйте запустить анализ ещё раз.
           </p>
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-2">
             <RerunReportButton projectUrl={report.project.url} />
+            <DeleteButton
+              entityType="report"
+              entityId={report.id}
+              entityName={report.project.name}
+              variant="icon"
+              redirectTo="/dashboard/reports"
+            />
           </div>
         </div>
       )}

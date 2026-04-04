@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { User, CreditCard, Shield } from "lucide-react";
+import { ProfileForm } from "@/components/profile-form";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -50,25 +51,16 @@ export default async function SettingsPage() {
             <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">Профиль</h2>
           </div>
           <Separator className="mb-4 bg-[#EAEAEA]" />
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#787774]">Имя</span>
-              <span className="text-sm text-[#1a1a1a]">{user.name}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#787774]">Email</span>
-              <span className="text-sm text-[#1a1a1a]">{user.email}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#787774]">Дата регистрации</span>
-              <span className="text-sm text-[#1a1a1a]">
-                {user.createdAt.toLocaleDateString("ru-RU", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </span>
-            </div>
+          <ProfileForm currentName={user.name ?? ""} currentEmail={user.email ?? ""} />
+          <div className="mt-4 flex items-center justify-between">
+            <span className="text-sm text-[#787774]">Дата регистрации</span>
+            <span className="text-sm text-[#1a1a1a]">
+              {user.createdAt.toLocaleDateString("ru-RU", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </span>
           </div>
         </div>
 

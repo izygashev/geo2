@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   LineChart,
   Line,
@@ -21,11 +22,21 @@ interface ScoreHistoryChartProps {
 }
 
 export function ScoreHistoryChart({ data }: ScoreHistoryChartProps) {
+  const router = useRouter();
+
   if (data.length < 2) return null;
 
   const currentScore = data[data.length - 1].score;
   const prevScore = data[data.length - 2].score;
   const delta = currentScore - prevScore;
+
+  // Клик на точку — diff с предыдущей
+  function handleDotClick(dotData: ScoreHistoryItem, index: number) {
+    if (index === 0) return; // У первой точки нет предыдущего отчёта
+    const prevId = data[index - 1].reportId;
+    const currId = dotData.reportId;
+    router.push(`/dashboard/reports/diff?a=${prevId}&b=${currId}`);
+  }
 
   return (
     <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
@@ -48,7 +59,17 @@ export function ScoreHistoryChart({ data }: ScoreHistoryChartProps) {
       </div>
 
       <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={data} margin={{ left: 0, right: 10, top: 5, bottom: 0 }}>
+        <LineChart
+          data={data}
+          margin={{ left: 0, right: 10, top: 5, bottom: 0 }}
+          onClick={(state) => {
+            if (state?.activeTooltipIndex != null) {
+              const idx = Number(state.activeTooltipIndex);
+              handleDotClick(data[idx], idx);
+            }
+          }}
+          style={{ cursor: "pointer" }}
+        >
           <XAxis
             dataKey="date"
             tick={{ fontSize: 10, fill: "#BBBBBB" }}
@@ -84,13 +105,20 @@ export function ScoreHistoryChart({ data }: ScoreHistoryChartProps) {
             stroke="#1a1a1a"
             strokeWidth={2}
             dot={{ r: 4, fill: "#1a1a1a", stroke: "white", strokeWidth: 2 }}
-            activeDot={{ r: 6, fill: "#1a1a1a", stroke: "white", strokeWidth: 2 }}
+            activeDot={{
+              r: 6,
+              fill: "#1a1a1a",
+              stroke: "white",
+              strokeWidth: 2,
+              cursor: "pointer",
+            }}
           />
         </LineChart>
       </ResponsiveContainer>
 
       <p className="mt-3 text-xs text-[#BBBBBB] text-center">
         {data.length} {data.length === 1 ? "отчёт" : data.length < 5 ? "отчёта" : "отчётов"} за всё время
+        {data.length > 1 && " · Клик на точку = сравнить с предыдущим"}
       </p>
     </div>
   );

@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { reportQueue } from "@/lib/queue";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const REPORT_COST = 10; // Стоимость одного отчёта в кредитах
+
+// Rate limit: 3 запроса в минуту по userId
+const REPORT_RATE_LIMIT = { maxRequests: 3, windowSeconds: 60 };
 
 interface StartReportBody {
   url: string;
@@ -30,6 +34,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Необходима авторизация" },
         { status: 401 }
+      );
+    }
+
+    // 1.5 Rate limit по userId
+    const rl = checkRateLimit(`reports:${session.user.id}`, REPORT_RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Слишком много запросов. Подождите минуту." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          },
+        }
       );
     }
 

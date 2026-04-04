@@ -67,10 +67,18 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Расписание автоматического повторного анализа
+  scheduleFrequency String?   // "weekly" | "monthly" | null (off)
+  scheduleNextRun   DateTime? // Когда следующий запуск
+
+  // Webhook URL для уведомлений (Zapier, Make, etc.)
+  webhookUrl        String?
+
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   reports Report[]
 
   @@index([userId])
+  @@index([scheduleNextRun])
 }
 
 model Report {
@@ -80,6 +88,9 @@ model Report {
   overallScore Float?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+
+  // ─── Публичная ссылка ───────────────────────────────
+  shareId      String?      @unique
 
   // ─── Site metadata (из scraper) ─────────────────────
   siteTitle       String?
