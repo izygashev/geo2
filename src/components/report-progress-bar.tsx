@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
@@ -8,11 +8,13 @@ import {
   CheckCircle2,
   XCircle,
   ArrowRight,
+  Square,
 } from "lucide-react";
 
 interface ReportProgressBarProps {
   reportId: string;
   onDismiss?: () => void;
+  onCancel?: () => void;
 }
 
 interface StatusResponse {
@@ -52,10 +54,12 @@ const fetcher = async (url: string) => {
 export function ReportProgressBar({
   reportId,
   onDismiss,
+  onCancel,
 }: ReportProgressBarProps) {
   const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
   const [fakeProgress, setFakeProgress] = useState(5);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Храним финальный результат отдельно — SWR сбрасывает data при key=null
   const [finalResult, setFinalResult] = useState<{
@@ -80,11 +84,23 @@ export function ReportProgressBar({
 
   // Когда получаем финальный статус — сохраняем его в отдельный стейт
   // Это предотвращает потерю данных при остановке SWR
-  const savedRef = useRef(false);
   useEffect(() => {
-    if (savedRef.current) return;
-    if (data?.status === "COMPLETED" || data?.status === "FAILED") {
-      savedRef.current = true;
+    if (!data) return;
+
+    if (data.status === "COMPLETED") {
+      // COMPLETED — финальный, останавливаем polling
+      setFinalResult({
+        status: data.status,
+        overallScore: data.overallScore,
+        projectUrl: data.projectUrl,
+      });
+      try {
+        localStorage.removeItem(LS_KEY);
+      } catch {
+        // ignore
+      }
+    } else if (data.status === "FAILED") {
+      // FAILED — финальный, останавливаем polling
       setFinalResult({
         status: data.status,
         overallScore: data.overallScore,
@@ -96,6 +112,7 @@ export function ReportProgressBar({
         // ignore
       }
     }
+    // Если status === "PROCESSING" — продолжаем polling (не трогаем finalResult)
   }, [data]);
 
   // Обработка мёртвых ошибок (404/403)
@@ -241,9 +258,48 @@ export function ReportProgressBar({
               </button>
             )}
             {!isDone && (
-              <span className="text-xs tabular-nums text-zinc-400">
-                {Math.round(fakeProgress)}%
-              </span>
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setIsCancelling(true);
+                    try {
+                      const res = await fetch(`/api/reports/${reportId}/cancel`, {
+                        method: "POST",
+                      });
+                      if (res.ok) {
+                        setFinalResult({
+                          status: "FAILED",
+                          overallScore: null,
+                          projectUrl: displayUrl,
+                        });
+                        try {
+                          localStorage.removeItem(LS_KEY);
+                        } catch {
+                          // ignore
+                        }
+                        onCancel?.();
+                      }
+                    } catch {
+                      // ignore — polling подхватит FAILED
+                    } finally {
+                      setIsCancelling(false);
+                    }
+                  }}
+                  disabled={isCancelling}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-400 transition-all hover:border-red-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                  title="Отменить анализ"
+                >
+                  {isCancelling ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Square className="h-3 w-3 fill-current" />
+                  )}
+                </button>
+                <span className="text-xs tabular-nums text-zinc-400">
+                  {Math.round(fakeProgress)}%
+                </span>
+              </div>
             )}
           </div>
         </div>

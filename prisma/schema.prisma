@@ -107,6 +107,14 @@ model Report {
   schemaOrgTypes  Json     @default("[]")
   contentLength   Int      @default(0)
 
+  // ─── Новые технические проверки (scraper) ───────────
+  robotsTxtAiFriendly Boolean @default(false)  // robots.txt не блокирует GPTBot/ClaudeBot/Google-Extended
+  semanticHtmlValid   Boolean @default(false)  // Наличие <main>, <article>, корректная иерархия H1→H2
+
+  // ─── Category / Sentiment (из LLM SoV анализа) ─────
+  categorySearched String?  // Ниша/категория, определённая LLM
+  sentiment        String?  // "positive" | "neutral" | "negative" | null
+
   // ─── Score breakdown ────────────────────────────────
   scoreSov        Float?   // Компонент score за Share of Voice
   scoreSchema     Float?   // Компонент score за Schema.org
@@ -129,6 +137,8 @@ model ShareOfVoice {
   isMentioned    Boolean
   mentionContext String  @default("") @db.Text
   competitors    Json
+  sentiment      String?  // "positive" | "neutral" | "negative" | null
+  categorySearched String? // Ниша/категория, по которой искали
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

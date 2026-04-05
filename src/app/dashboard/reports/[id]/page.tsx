@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { RecommendationCard } from "@/components/recommendation-card";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { SovDonutChart, SovBarChart } from "@/components/sov-charts";
 import { ScoreRing, ScoreBreakdownBar } from "@/components/score-ring";
 import { SiteChecklist } from "@/components/site-checklist";
@@ -28,6 +28,7 @@ import { RerunReportButton } from "@/components/rerun-report-button";
 import { ScoreHistoryChart } from "@/components/score-history-chart";
 import { ShareReportButton } from "@/components/share-report-button";
 import { DeleteButton } from "@/components/delete-button";
+import { VisibilityTrendChart } from "@/components/visibility-trend-chart-wrapper";
 
 export default async function ReportPage({
   params,
@@ -76,6 +77,13 @@ export default async function ReportPage({
     score: Math.round(r.overallScore!),
     reportId: r.id,
   }));
+
+  // План пользователя (для paywall)
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { plan: true },
+  });
+  const isPro = currentUser?.plan === "PRO" || currentUser?.plan === "AGENCY";
 
   // Найдём предыдущий отчёт по этому проекту для кнопки "Сравнить"
   const currentIdx = scoreHistory.findIndex((r) => r.id === report.id);
@@ -231,6 +239,12 @@ export default async function ReportPage({
             <ScoreHistoryChart data={historyData} />
           )}
 
+          {/* 30-day AI Visibility Trend — прогноз */}
+          <VisibilityTrendChart
+            currentScore={report.overallScore ?? 0}
+            createdAt={report.createdAt.toISOString()}
+          />
+
           {/* ROW 1: Score Ring + Score Breakdown + Quick Stats */}
           <div className="grid gap-4 lg:grid-cols-12">
 
@@ -293,6 +307,29 @@ export default async function ReportPage({
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-[#787774]">запросов с упоминанием бренда</p>
+                {/* Sentiment badge */}
+                {report.sentiment && (
+                  <div className="mt-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      report.sentiment === "positive"
+                        ? "bg-[#EDF3EC] text-[#2D6A4F]"
+                        : report.sentiment === "negative"
+                          ? "bg-[#FDEBEC] text-[#B02A37]"
+                          : "bg-[#F7F6F3] text-[#787774]"
+                    }`}>
+                      {report.sentiment === "positive" ? "👍" : report.sentiment === "negative" ? "👎" : "➖"}
+                      {" "}Тональность: {report.sentiment === "positive" ? "Позитивная" : report.sentiment === "negative" ? "Негативная" : "Нейтральная"}
+                    </span>
+                  </div>
+                )}
+                {/* Category badge */}
+                {report.categorySearched && (
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#F0EFEB] px-2 py-0.5 text-[10px] font-medium text-[#787774]">
+                      🏷️ Ниша: {report.categorySearched}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Recommendations count */}
@@ -428,57 +465,46 @@ export default async function ReportPage({
                 siteTitle={report.siteTitle}
                 siteDescription={report.siteDescription}
                 siteH1={report.siteH1}
+                robotsTxtAiFriendly={report.robotsTxtAiFriendly}
+                semanticHtmlValid={report.semanticHtmlValid}
               />
             </div>
           </div>
 
-          {/* ROW 3: Competitors */}
-          {allCompetitors.length > 0 && (
-            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
-              <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-5">
-                <Users className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" />
-                Конкуренты в AI-поисковиках
-              </h2>
-              <p className="text-sm text-[#787774] mb-5">
-                Бренды, которые AI-системы упоминают вместе с вами или вместо вас
-              </p>
-              <CompetitorsTable competitors={allCompetitors} />
-            </div>
-          )}
-
-          {/* ROW 4: Recommendations */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
-                <Lightbulb className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" />
-                Рекомендации по GEO-оптимизации
-              </h2>
-              {report.recommendations.length > 0 && (
-                <span className="rounded-full bg-[#F7F6F3] px-2.5 py-0.5 text-xs text-[#787774]">
-                  {report.recommendations.length} шт.
-                </span>
-              )}
-            </div>
-            {report.recommendations.length > 0 ? (
-              <div className="space-y-3">
-                {report.recommendations.map((rec, i) => (
-                  <RecommendationCard
-                    key={rec.id}
-                    index={i}
-                    type={rec.type}
-                    title={rec.title}
-                    description={rec.description}
-                    generatedCode={rec.generatedCode}
-                  />
-                ))}
-              </div>
+          {/* ROW 3: Competitors — всегда показываем */}
+          <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-5">
+              <Users className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" />
+              Конкуренты в AI-поисковиках
+            </h2>
+            <p className="text-sm text-[#787774] mb-5">
+              {allCompetitors.length > 0
+                ? "Бренды, которые AI-системы рекомендуют в вашей нише"
+                : "AI-системы пока не определили конкурентов в этой нише"}
+            </p>
+            {allCompetitors.length > 0 ? (
+              <CompetitorsTable competitors={allCompetitors} isPro={isPro} />
             ) : (
-              <div className="rounded-xl border border-dashed border-[#EAEAEA] bg-white p-10 text-center">
-                <Lightbulb className="mx-auto h-5 w-5 text-[#BBBBBB] mb-3" />
-                <p className="text-[#787774] text-sm">Рекомендации не сформированы</p>
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <Users className="h-5 w-5 text-[#BBBBBB]" />
+                <p className="text-sm text-[#787774]">
+                  Данные о конкурентах будут доступны после следующего анализа
+                </p>
               </div>
             )}
           </div>
+
+          {/* ROW 4: Recommendations — Premium Panel */}
+          <RecommendationsPanel
+            recommendations={report.recommendations.map((rec) => ({
+              id: rec.id,
+              type: rec.type,
+              title: rec.title,
+              description: rec.description,
+              generatedCode: rec.generatedCode,
+            }))}
+            projectUrl={report.project.url}
+          />
 
         </div>
       )}

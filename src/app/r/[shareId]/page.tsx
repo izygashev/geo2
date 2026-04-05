@@ -5,6 +5,7 @@ import { ScoreRing, ScoreBreakdownBar } from "@/components/score-ring";
 import { SiteChecklist } from "@/components/site-checklist";
 import { SovDonutChart, SovBarChart } from "@/components/sov-charts";
 import { CompetitorsTable } from "@/components/competitors-table";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
 
 export default async function SharedReportPage({
   params,
@@ -108,6 +109,8 @@ export default async function SharedReportPage({
           siteDescription={report.siteDescription}
           siteH1={report.siteH1}
           contentLength={report.contentLength}
+          robotsTxtAiFriendly={report.robotsTxtAiFriendly}
+          semanticHtmlValid={report.semanticHtmlValid}
         />
 
         {/* SoV */}
@@ -123,36 +126,32 @@ export default async function SharedReportPage({
           </div>
         )}
 
-        {/* Competitors */}
-        {topCompetitors.length > 0 && (
-          <CompetitorsTable competitors={topCompetitors} />
-        )}
+        {/* Competitors — всегда показываем */}
+        <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+          <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
+            Конкуренты в AI-поисковиках
+          </h2>
+          {topCompetitors.length > 0 ? (
+            <CompetitorsTable competitors={topCompetitors} />
+          ) : (
+            <p className="py-4 text-center text-sm text-[#787774]">
+              AI-системы пока не определили конкурентов
+            </p>
+          )}
+        </div>
 
-        {/* Recommendations */}
+        {/* Recommendations — Premium Panel */}
         {report.recommendations.length > 0 && (
-          <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
-            <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
-              Рекомендации
-            </h2>
-            <div className="space-y-3">
-              {report.recommendations.map((rec, i) => (
-                <div
-                  key={rec.id}
-                  className="rounded-lg border border-[#EAEAEA] bg-[#FBFBFA] p-4"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F7F6F3] text-xs font-medium text-[#787774]">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <h3 className="text-sm font-medium text-[#1a1a1a]">{rec.title}</h3>
-                      <p className="mt-1 text-sm text-[#787774]">{rec.description}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <RecommendationsPanel
+            recommendations={report.recommendations.map((rec) => ({
+              id: rec.id,
+              type: rec.type,
+              title: rec.title,
+              description: rec.description,
+              generatedCode: rec.generatedCode,
+            }))}
+            projectUrl={report.project.url}
+          />
         )}
 
         {/* Footer */}

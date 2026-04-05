@@ -145,7 +145,7 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
     // Проверяем, что отчёт ещё существует в БД
     const existingReport = await prisma.report.findUnique({
       where: { id: reportId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
 
     if (!existingReport) {
@@ -153,7 +153,30 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
       return; // Job считается завершённым, но данные не сохраняются
     }
 
+    // Если пользователь отменил отчёт — не перезаписываем статус
+    if (existingReport.status === "FAILED") {
+      console.log(`[Worker] ⚠️ Отчёт ${reportId} уже отменён пользователем — пропускаем сохранение`);
+      return;
+    }
+
     await prisma.$transaction(async (tx) => {
+      // Собираем доминирующие sentiment и category из SoV
+      const sentiments = sovResults
+        .map((r) => r.sentiment)
+        .filter((s): s is "positive" | "neutral" | "negative" => !!s);
+      const dominantSentiment = sentiments.length > 0
+        ? sentiments.sort((a, b) =>
+            sentiments.filter(v => v === b).length - sentiments.filter(v => v === a).length
+          )[0]
+        : null;
+
+      const categories = sovResults
+        .map((r) => r.categorySearched)
+        .filter((c): c is string => !!c);
+      const dominantCategory = categories.length > 0
+        ? categories[0] // Первая определённая категория
+        : null;
+
       // Обновляем статус отчёта, score и метаданные сайта
       await tx.report.update({
         where: { id: reportId },
@@ -167,6 +190,12 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
           hasLlmsTxt: siteData.hasLlmsTxt,
           schemaOrgTypes: siteData.schemaOrgTypes,
           contentLength: siteData.bodyText.length,
+          // Новые технические проверки
+          robotsTxtAiFriendly: siteData.robotsTxtAiFriendly,
+          semanticHtmlValid: siteData.semanticHtmlValid,
+          // Category & Sentiment
+          categorySearched: dominantCategory,
+          sentiment: dominantSentiment,
           // Score breakdown
           scoreSov: analysis.scoreBreakdown.sov,
           scoreSchema: analysis.scoreBreakdown.schema,
@@ -186,6 +215,8 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
             isMentioned: sov.isMentioned,
             mentionContext: sov.mentionContext || "",
             competitors: sov.competitors,
+            sentiment: sov.sentiment ?? null,
+            categorySearched: sov.categorySearched ?? null,
           })),
         });
       }
@@ -250,42 +281,56 @@ async function processReport(job: Job<ReportJobData>): Promise<void> {
   } catch (error) {
     console.error(`[Worker] ❌ Ошибка обработки отчёта ${reportId}:`, error);
 
-    // Ставим статус FAILED — кредиты НЕ списаны
-    try {
-      await prisma.report.updateMany({
-        where: { id: reportId },
-        data: { status: "FAILED" },
-      });
-    } catch (dbError) {
-      console.error(`[Worker] ❌ Не удалось обновить статус на FAILED:`, dbError);
-    }
+    const maxAttempts = job.opts.attempts ?? 3;
+    const isFinalAttempt = job.attemptsMade >= maxAttempts - 1;
 
-    // Email-уведомление об ошибке
-    try {
-      const userForFail = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true, name: true },
-      });
-      const projectForFail = await prisma.project.findUnique({
-        where: { id: projectId },
-        select: { name: true },
-      });
-      if (userForFail?.email) {
-        const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-        await sendReportReadyEmail({
-          to: userForFail.email,
-          userName: userForFail.name ?? "Пользователь",
-          projectName: projectForFail?.name ?? projectUrl,
-          reportUrl: `${baseUrl}/dashboard/reports/${reportId}`,
-          score: null,
-          status: "FAILED",
+    console.log(
+      `[Worker]    Попытка ${job.attemptsMade + 1} из ${maxAttempts}` +
+        (isFinalAttempt ? " (финальная)" : " — будет retry")
+    );
+
+    if (isFinalAttempt) {
+      // Финальная попытка — ставим FAILED и шлём email
+      // Но только если пользователь не отменил вручную
+      try {
+        await prisma.report.updateMany({
+          where: { id: reportId, status: "PROCESSING" },
+          data: { status: "FAILED" },
         });
+      } catch (dbError) {
+        console.error(`[Worker] ❌ Не удалось обновить статус на FAILED:`, dbError);
       }
-    } catch (emailErr) {
-      console.error("[Worker] ⚠️ Не удалось отправить fail-email:", emailErr);
+
+      // Email-уведомление об ошибке
+      try {
+        const userForFail = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true, name: true },
+        });
+        const projectForFail = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { name: true },
+        });
+        if (userForFail?.email) {
+          const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+          await sendReportReadyEmail({
+            to: userForFail.email,
+            userName: userForFail.name ?? "Пользователь",
+            projectName: projectForFail?.name ?? projectUrl,
+            reportUrl: `${baseUrl}/dashboard/reports/${reportId}`,
+            score: null,
+            status: "FAILED",
+          });
+        }
+      } catch (emailErr) {
+        console.error("[Worker] ⚠️ Не удалось отправить fail-email:", emailErr);
+      }
+    } else {
+      // Не финальная попытка — оставляем PROCESSING, BullMQ сделает retry
+      console.log(`[Worker]    Статус остаётся PROCESSING — ждём retry`);
     }
 
-    throw error; // Пробрасываем, чтобы BullMQ сделал retry
+    throw error; // Пробрасываем, чтобы BullMQ сделал retry (или зафиксировал failed)
   }
 }
 

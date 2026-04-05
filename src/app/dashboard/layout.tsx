@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -42,10 +43,10 @@ export default async function DashboardLayout({
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 flex w-56 flex-col border-r border-[#EAEAEA] bg-[#FBFBFA]">
         {/* Logo */}
-        <div className="flex h-14 items-center gap-2 border-b border-[#EAEAEA] px-5">
+        <Link href="/" className="flex h-14 items-center gap-2 border-b border-[#EAEAEA] px-5 transition-colors hover:bg-[#F7F6F3]">
           <Globe className="h-4 w-4 text-[#787774]" />
           <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">GEO SaaS</span>
-        </div>
+        </Link>
 
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 px-3 py-4">

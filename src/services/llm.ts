@@ -9,7 +9,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import type { SiteData } from "./scraper.js";
-import { extractJson } from "../lib/json-utils.js";
+import { extractJson, repairJson } from "../lib/json-utils.js";
 
 // ─── OpenRouter Client (lazy init — ждём загрузки .env) ──
 let _openrouter: OpenAI | null = null;
@@ -29,16 +29,14 @@ function getClient(): OpenAI {
 }
 
 // ─── Модели ─────────────────────────────────────────────
-const CLAUDE_MODEL = "anthropic/claude-sonnet-4";
-const SONAR_MODEL = "perplexity/sonar";
-const CHATGPT_MODEL = "openai/gpt-4o-mini";
-const GEMINI_MODEL = "google/gemini-2.0-flash-001";
+const CLAUDE_MODEL = "anthropic/claude-opus-4.6";
+const SONAR_MODEL = "perplexity/sonar-pro";
+const GPT_OSS_MODEL = "openai/gpt-oss-120b";
 
 // Multi-LLM модели для SoV-проверки
 export const MULTI_LLM_MODELS = [
   { id: SONAR_MODEL, name: "Perplexity" },
-  { id: CHATGPT_MODEL, name: "ChatGPT" },
-  { id: GEMINI_MODEL, name: "Gemini" },
+  { id: GPT_OSS_MODEL, name: "GPT-OSS-120B" },
 ];
 
 // Бесплатные fallback-модели (если закончились кредиты)
@@ -46,6 +44,92 @@ const FREE_FALLBACK_MODELS = [
   "stepfun/step-3.5-flash:free",
   "qwen/qwen3-4b:free",
 ];
+
+// ─── Кэш топ-модели (обновляется раз в час) ────────────
+let _cachedTopModel: string | null = null;
+let _cachedTopModelTimestamp = 0;
+const TOP_MODEL_CACHE_TTL = 60 * 60 * 1000; // 1 час
+
+/**
+ * Запрашивает список моделей у OpenRouter и возвращает ID самой
+ * «топовой» текстовой модели за последнюю неделю.
+ * Сортируем по дате создания (новейшие), фильтруем: text->text, платные,
+ * контекст >= 32k, не :free, не роутеры.
+ */
+async function fetchTopModel(): Promise<string | null> {
+  // Проверяем кэш
+  if (_cachedTopModel && Date.now() - _cachedTopModelTimestamp < TOP_MODEL_CACHE_TTL) {
+    console.log(`[LLM] 📦 Используем кэшированную топ-модель: ${_cachedTopModel}`);
+    return _cachedTopModel;
+  }
+
+  try {
+    console.log("[LLM] 🌐 Запрашиваю список моделей у OpenRouter...");
+    const resp = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      },
+    });
+
+    if (!resp.ok) {
+      console.error(`[LLM] ❌ OpenRouter /models вернул ${resp.status}`);
+      return null;
+    }
+
+    const json = await resp.json();
+    const models: Array<{
+      id: string;
+      name: string;
+      created: number;
+      context_length: number;
+      architecture: { modality: string; input_modalities: string[]; output_modalities: string[] };
+      pricing: { prompt: string; completion: string };
+    }> = json.data ?? [];
+
+    // Фильтруем: текстовые, платные, контекст >= 32k, не :free, не роутеры/специальные
+    const oneWeekAgo = Date.now() / 1000 - 7 * 24 * 60 * 60;
+    const excludePatterns = [
+      "openrouter/", "switchpoint/", "relace/", "bodybuilder",
+      "llama-guard", ":free", "deep-research", "search-preview",
+    ];
+
+    const candidates = models.filter((m) => {
+      // Только текст в выходе
+      if (!m.architecture?.output_modalities?.includes("text")) return false;
+      // Контекст >= 32k
+      if (m.context_length < 32000) return false;
+      // Не бесплатные
+      const promptPrice = parseFloat(m.pricing?.prompt ?? "0");
+      if (promptPrice <= 0) return false;
+      // Не роутеры/специальные
+      if (excludePatterns.some((p) => m.id.toLowerCase().includes(p))) return false;
+      // Не слишком дорогие (< $0.01 per 1k input tokens, т.е. < 0.00001 per token)
+      if (promptPrice > 0.00001) return false;
+      return true;
+    });
+
+    // Сортируем: новейшие (за последнюю неделю) + разумная цена
+    const recentModels = candidates.filter((m) => m.created >= oneWeekAgo);
+    const pool = recentModels.length >= 3 ? recentModels : candidates.slice(0, 20);
+
+    // Выбираем лучшую: самую новую с хорошим контекстом
+    pool.sort((a, b) => b.created - a.created);
+
+    if (pool.length === 0) {
+      console.log("[LLM] ⚠️ Не нашлось подходящих топ-моделей");
+      return null;
+    }
+
+    const topModel = pool[0].id;
+    _cachedTopModel = topModel;
+    _cachedTopModelTimestamp = Date.now();
+    console.log(`[LLM] 🏆 Топ-модель недели: ${topModel} (${pool[0].name})`);
+    return topModel;
+  } catch (err) {
+    console.error("[LLM] ❌ Ошибка при получении списка моделей:", err);
+    return null;
+  }
+}
 
 // ─── Zod Схемы ──────────────────────────────────────────
 const KeywordsSchema = z.object({
@@ -61,14 +145,17 @@ const KeywordsSchema = z.object({
 });
 
 const SovResultSchema = z.object({
+  categorySearched: z.string(),
   isMentioned: z.boolean(),
   mentionContext: z.string().optional(),
+  sentiment: z.enum(["positive", "neutral", "negative"]).optional(),
   competitors: z.array(
     z.object({
       name: z.string(),
       url: z.string().optional(),
+      rank: z.number().optional(),
     })
-  ),
+  ).min(1),
 });
 
 const RecommendationsSchema = z.object({
@@ -101,7 +188,9 @@ export interface SovCheckResult {
   llmProvider: string;
   isMentioned: boolean;
   mentionContext: string;
-  competitors: { name: string; url?: string }[];
+  sentiment?: "positive" | "neutral" | "negative";
+  categorySearched?: string;
+  competitors: { name: string; url?: string; rank?: number }[];
 }
 
 export interface RecommendationItem {
@@ -139,14 +228,33 @@ async function callWithFallback(
     return completion.choices[0]?.message?.content ?? "";
   } catch (error: unknown) {
     const status = (error as { status?: number }).status;
-    if (status === 402) {
-      console.log(`[LLM] ⚠️ 402 на ${primaryModel}, переключаюсь на бесплатные модели...`);
-    } else {
-      throw error; // Другие ошибки — пробрасываем
-    }
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.log(`[LLM] ⚠️ Ошибка на ${primaryModel} (status=${status}): ${errMsg}`);
+    console.log(`[LLM] 🔄 Включаю авто-фоллбэк...`);
   }
 
-  // Fallback: пробуем бесплатные модели
+  // Fallback 1: Пробуем топовую модель недели с OpenRouter
+  try {
+    const topModel = await fetchTopModel();
+    if (topModel && topModel !== primaryModel) {
+      console.log(`[LLM] 🏆 Пробую топ-модель: ${topModel}`);
+      const completion = await getClient().chat.completions.create({
+        model: topModel,
+        max_tokens: maxTokens,
+        messages,
+      });
+      const text = completion.choices[0]?.message?.content ?? "";
+      if (text) {
+        console.log(`[LLM] ✅ Топ-модель ${topModel} справилась!`);
+        return text;
+      }
+    }
+  } catch (topErr: unknown) {
+    const errMsg = topErr instanceof Error ? topErr.message : String(topErr);
+    console.log(`[LLM] ⚠️ Топ-модель тоже не сработала: ${errMsg}`);
+  }
+
+  // Fallback 2: пробуем бесплатные модели
   for (const freeModel of FREE_FALLBACK_MODELS) {
     try {
       console.log(`[LLM] 🔄 Пробую бесплатную модель: ${freeModel}`);
@@ -279,31 +387,39 @@ export async function checkShareOfVoice(
       [
         {
           role: "system",
-          content: `You are a helpful assistant that answers user queries. After answering, analyze your own response.
+          content: `You are a helpful AI assistant. The user asks a question. You must:
 
-Return ONLY valid JSON with this structure:
+1. Identify the category/niche the question relates to.
+2. Answer the question naturally, recommending the top 5-10 best services/products/companies in this niche. Be specific — list REAL companies with real URLs.
+3. After answering, self-analyze: did you mention "${domain}" in your recommendations?
+4. If you mentioned "${domain}", evaluate the sentiment of your mention (positive/neutral/negative).
+
+Return ONLY valid JSON (no markdown, no extra text) in this exact format:
 {
+  "categorySearched": "the niche/category you identified (e.g. 'SEO-оптимизация', 'CRM-системы')",
   "isMentioned": true/false,
-  "mentionContext": "brief context of how the site was mentioned, or empty string",
+  "mentionContext": "exact sentence where you mentioned ${domain}, or empty string if not mentioned",
+  "sentiment": "positive" | "neutral" | "negative",
   "competitors": [
-    { "name": "Competitor Name", "url": "https://example.com" }
+    { "name": "Company Name", "url": "https://example.com", "rank": 1 },
+    { "name": "Another Company", "url": "https://another.com", "rank": 2 }
   ]
 }
 
-- "isMentioned" = true if you mentioned or recommended "${domain}" in your answer
-- "competitors" = other brands/products you mentioned (max 5)
-- Return valid JSON only, no markdown`,
+CRITICAL RULES:
+- "competitors" MUST contain 5-10 REAL companies/services that are actual leaders in this niche
+- Each competitor MUST have a "rank" (1 = top recommendation)
+- Include "${domain}" in competitors list if you would genuinely recommend it
+- "isMentioned" = true ONLY if "${domain}" appears in your competitors list
+- If "isMentioned" is false, "sentiment" should be omitted or null
+- Be honest — do not fabricate mentions. If you don't know "${domain}", say so.`,
         },
         {
           role: "user",
-          content: `${keyword}
-
-After providing your answer, analyze it and return JSON indicating:
-1. Whether you mentioned or recommended ${domain} (isMentioned)
-2. List of other brands/competitors you mentioned (competitors)`,
+          content: keyword,
         },
       ],
-      1000,
+      1500,
       SONAR_MODEL
     );
 
@@ -312,13 +428,15 @@ After providing your answer, analyze it and return JSON indicating:
     try {
       const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
       console.log(
-        `[LLM] ${parsed.isMentioned ? "✅" : "❌"} "${keyword}" → mentioned: ${parsed.isMentioned}, competitors: ${parsed.competitors.length}`
+        `[LLM] ${parsed.isMentioned ? "✅" : "❌"} "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${parsed.isMentioned}, competitors: ${parsed.competitors.length}${parsed.sentiment ? `, sentiment: ${parsed.sentiment}` : ""}`
       );
       return {
         keyword,
         llmProvider: "perplexity-sonar",
         isMentioned: parsed.isMentioned,
         mentionContext: parsed.mentionContext ?? "",
+        sentiment: parsed.sentiment ?? undefined,
+        categorySearched: parsed.categorySearched,
         competitors: parsed.competitors,
       };
     } catch {
@@ -360,40 +478,45 @@ export async function checkShareOfVoiceMultiLlm(
   console.log(`[LLM] 🔍 Multi-LLM SoV проверка: "${keyword}"`);
 
   const results: SovCheckResult[] = [];
+  const domain = new URL(siteUrl).hostname.replace("www.", "");
 
   for (const model of MULTI_LLM_MODELS) {
     try {
-      const domain = new URL(siteUrl).hostname.replace("www.", "");
-
       const rawText = await callWithFallback(
         [
           {
             role: "system",
-            content: `You are a helpful assistant that answers user queries. After answering, analyze your own response.
+            content: `You are a helpful AI assistant. The user asks a question. You must:
 
-Return ONLY valid JSON with this structure:
+1. Identify the category/niche the question relates to.
+2. Answer the question naturally, recommending the top 5-10 best services/products/companies in this niche. Be specific — list REAL companies with real URLs.
+3. After answering, self-analyze: did you mention "${domain}" in your recommendations?
+4. If you mentioned "${domain}", evaluate the sentiment of your mention (positive/neutral/negative).
+
+Return ONLY valid JSON (no markdown, no extra text) in this exact format:
 {
+  "categorySearched": "the niche/category you identified",
   "isMentioned": true/false,
-  "mentionContext": "brief context of how the site was mentioned, or empty string",
+  "mentionContext": "exact sentence where you mentioned ${domain}, or empty string",
+  "sentiment": "positive" | "neutral" | "negative",
   "competitors": [
-    { "name": "Competitor Name", "url": "https://example.com" }
+    { "name": "Company Name", "url": "https://example.com", "rank": 1 }
   ]
 }
 
-- "isMentioned" = true if you mentioned or recommended "${domain}" in your answer
-- "competitors" = other brands/products you mentioned (max 5)
-- Return valid JSON only, no markdown`,
+CRITICAL RULES:
+- "competitors" MUST contain 5-10 REAL companies that are actual leaders in this niche
+- Each competitor MUST have a "rank" (1 = top recommendation)
+- Include "${domain}" in competitors list if you would genuinely recommend it
+- "isMentioned" = true ONLY if "${domain}" appears in your competitors list
+- Be honest — do not fabricate mentions.`,
           },
           {
             role: "user",
-            content: `${keyword}
-
-After providing your answer, analyze it and return JSON indicating:
-1. Whether you mentioned or recommended ${domain} (isMentioned)
-2. List of other brands/competitors you mentioned (competitors)`,
+            content: keyword,
           },
         ],
-        1000,
+        1500,
         model.id
       );
 
@@ -402,13 +525,15 @@ After providing your answer, analyze it and return JSON indicating:
       try {
         const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
         console.log(
-          `[LLM] ${parsed.isMentioned ? "✅" : "❌"} [${model.name}] "${keyword}" → mentioned: ${parsed.isMentioned}`
+          `[LLM] ${parsed.isMentioned ? "✅" : "❌"} [${model.name}] "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${parsed.isMentioned}`
         );
         results.push({
           keyword,
           llmProvider: model.name.toLowerCase(),
           isMentioned: parsed.isMentioned,
           mentionContext: parsed.mentionContext ?? "",
+          sentiment: parsed.sentiment ?? undefined,
+          categorySearched: parsed.categorySearched,
           competitors: parsed.competitors,
         });
       } catch {
@@ -455,7 +580,13 @@ export async function generateRecommendations(
   const allCompetitors = sovResults
     .flatMap((r) => r.competitors.map((c) => c.name))
     .filter((v, i, a) => a.indexOf(v) === i)
-    .slice(0, 10);
+    .slice(0, 15);
+
+  // Собираем уникальные категории из SoV
+  const categories = sovResults
+    .map((r) => r.categorySearched)
+    .filter((v): v is string => !!v)
+    .filter((v, i, a) => a.indexOf(v) === i);
 
   try {
     const systemContent = `You are a GEO (Generative Engine Optimization) expert. You help websites get recommended by AI assistants (ChatGPT, Perplexity, Claude, Gemini).
@@ -475,13 +606,16 @@ Return ONLY valid JSON, no markdown or explanations.`;
 - H1: ${siteData.h1}
 - Has /llms.txt: ${siteData.hasLlmsTxt}
 - Schema.org types: [${siteData.schemaOrgTypes.join(", ")}]
+- robots.txt AI-friendly: ${siteData.robotsTxtAiFriendly}${siteData.robotsTxtBlockedBots.length > 0 ? ` (blocked bots: ${siteData.robotsTxtBlockedBots.join(", ")})` : ""}
+- Semantic HTML valid: ${siteData.semanticHtmlValid} (main: ${siteData.semanticHtmlDetails.hasMain}, article: ${siteData.semanticHtmlDetails.hasArticle}, heading hierarchy OK: ${siteData.semanticHtmlDetails.headingHierarchyOk})
 - Content preview: ${siteData.bodyText.slice(0, 1000)}
 
 ## Share of Voice Results
+- Category/Niche identified: ${categories.join(", ") || "unknown"}
 - Mentioned in ${mentionedCount} out of ${totalChecks} AI searches
-- Competitors found: [${allCompetitors.join(", ")}]
+- Top competitors AI recommends: [${allCompetitors.join(", ")}]
 - Detailed results:
-${sovResults.map((r) => `  - "${r.keyword}": ${r.isMentioned ? "✅ mentioned" : "❌ not mentioned"}`).join("\n")}
+${sovResults.map((r) => `  - "${r.keyword}" (category: ${r.categorySearched ?? "?"}): ${r.isMentioned ? `✅ mentioned (sentiment: ${r.sentiment ?? "n/a"})` : "❌ not mentioned"}, competitors: [${r.competitors.map(c => c.name).join(", ")}]`).join("\n")}
 
 Return JSON in this exact format:
 {
@@ -507,12 +641,21 @@ scoreBreakdown rules (each 0-100):
 - sov: based on mention ratio (${mentionedCount}/${totalChecks})
 - schema: 0 if no Schema.org, 50-100 based on richness
 - llmsTxt: 0 if missing, 80-100 if present
-- content: based on content quality, length, clarity
+- content: based on content quality, length, clarity, semantic HTML, and robots.txt friendliness
 - authority: estimated brand authority for AI citations
 
-Recommendation types: "schema-org", "content", "technical", "llms-txt", "authority", "competitors".
-Generate 4-7 specific, actionable recommendations in Russian with real code examples where applicable.
+Recommendation types: "schema-org", "schema-faq", "content", "rag-content", "technical", "llms-txt", "authority", "competitors", "robots-txt", "semantic-html", "semantic-tables", "entity", "platform-seeding", "sentiment".
+Type descriptions (use every relevant type):
+- schema-faq: FAQPage / HowTo schema markup for AI answer extraction
+- rag-content: Chunked, paragraph-level content that RAG pipelines can easily retrieve
+- semantic-tables: Comparison tables and data tables that LLMs cite in responses
+- entity: Named entity consistency, Knowledge Graph presence, Wikidata alignment
+- platform-seeding: Presence on AI-indexed platforms (Wikipedia, GitHub, Reddit, HuggingFace)
+- sentiment: Positive brand sentiment signals AI models use for ranking
+Generate 6-12 specific, actionable recommendations in Russian with real code examples where applicable. Cover as many different types as possible.
 All recommendation titles and descriptions must be in Russian.
+${!siteData.robotsTxtAiFriendly ? `IMPORTANT: robots.txt blocks AI bots (${siteData.robotsTxtBlockedBots.join(", ")}). Include a recommendation about this.` : ""}
+${!siteData.semanticHtmlValid ? `IMPORTANT: Semantic HTML issues found (missing <main>/<article>, heading hierarchy problems). Include a recommendation about this.` : ""}
 The overallScore should be a weighted average of scoreBreakdown components.`;
 
     const rawText = await callWithFallback(
@@ -525,7 +668,13 @@ The overallScore should be a weighted average of scoreBreakdown components.`;
     );
 
     const jsonStr = extractJson(rawText);
-    const parsed = RecommendationsSchema.parse(JSON.parse(jsonStr));
+    let jsonFixed = jsonStr;
+    try {
+      JSON.parse(jsonFixed);
+    } catch {
+      jsonFixed = repairJson(jsonFixed);
+    }
+    const parsed = RecommendationsSchema.parse(JSON.parse(jsonFixed));
 
     console.log(
       `[LLM] ✅ Score: ${parsed.overallScore}, рекомендаций: ${parsed.recommendations.length}`
@@ -558,19 +707,19 @@ The overallScore should be a weighted average of scoreBreakdown components.`;
     if (!siteData.hasLlmsTxt) {
       fallbackRecs.push({
         type: "llms-txt",
-        title: "Create /llms.txt file",
+        title: "Создайте файл /llms.txt для AI-ботов",
         description:
-          "Add an /llms.txt file to your website root to help AI assistants understand your brand and offerings. This is a new standard for AI-friendly websites.",
-        generatedCode: `# ${siteData.title}\n> ${siteData.description}\n\nThis file provides information about our website for AI assistants.`,
+          "Добавьте файл /llms.txt в корень сайта, чтобы AI-ассистенты могли понять ваш бренд и предложения. Это новый стандарт для AI-дружественных сайтов.",
+        generatedCode: `# ${siteData.title}\n> ${siteData.description}\n\nЭтот файл содержит информацию о нашем сайте для AI-ассистентов.`,
       });
     }
 
     if (siteData.schemaOrgTypes.length === 0) {
       fallbackRecs.push({
         type: "schema-org",
-        title: "Add Schema.org structured data",
+        title: "Добавьте разметку Schema.org (JSON-LD)",
         description:
-          "Implement JSON-LD structured data (Organization, FAQPage, Product) to help AI systems understand your content.",
+          "Внедрите структурированные данные JSON-LD (Organization, FAQPage, Product), чтобы AI-системы лучше понимали ваш контент и цитировали его в ответах.",
         generatedCode: `<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "${siteData.title}",\n  "url": "${siteData.url}"\n}\n</script>`,
       });
     }
@@ -578,10 +727,126 @@ The overallScore should be a weighted average of scoreBreakdown components.`;
     if (mentionedCount === 0) {
       fallbackRecs.push({
         type: "authority",
-        title: "Improve brand authority for AI citations",
+        title: "Повысьте авторитетность бренда для AI-цитирования",
         description:
-          "Your brand was not mentioned in any AI search results. Focus on creating authoritative, well-cited content that AI systems are likely to reference.",
+          "Ваш бренд не упоминается ни в одном AI-результате. Сосредоточьтесь на создании авторитетного, хорошо цитируемого контента, на который AI-системы будут ссылаться.",
         generatedCode: "",
+      });
+    }
+
+    // --- Additional GEO-specific fallback recommendations ---
+
+    fallbackRecs.push({
+      type: "schema-faq",
+      title: "Добавьте FAQPage Schema для AI-извлечения ответов",
+      description:
+        "Разметка FAQPage позволяет AI-моделям мгновенно находить пары вопрос-ответ на вашем сайте и цитировать их. Добавьте минимум 5 часто задаваемых вопросов.",
+      generatedCode: `<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Что такое ${siteData.title}?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "${siteData.description || 'Описание вашего продукта/услуги'}"
+      }
+    }
+  ]
+}
+</script>`,
+    });
+
+    fallbackRecs.push({
+      type: "rag-content",
+      title: "Оптимизируйте контент для RAG-пайплайнов",
+      description:
+        "AI-модели используют Retrieval-Augmented Generation (RAG) для поиска релевантных фрагментов. Разбейте длинные страницы на семантические параграфы (150-300 слов) с чёткими заголовками, чтобы повысить точность извлечения.",
+      generatedCode: `<!-- Пример RAG-оптимизированной структуры -->
+<article>
+  <section id="что-это">
+    <h2>Что такое ${siteData.title}?</h2>
+    <p>Чёткий ответ в 2-3 предложениях, который AI может процитировать целиком.</p>
+  </section>
+  <section id="преимущества">
+    <h2>Ключевые преимущества</h2>
+    <p>Каждый параграф — один факт. Идеально для чанкинга.</p>
+  </section>
+</article>`,
+    });
+
+    fallbackRecs.push({
+      type: "entity",
+      title: "Укрепите сущность бренда в Knowledge Graph",
+      description:
+        "AI-модели опираются на Knowledge Graph и Wikidata при формировании ответов. Убедитесь, что название бренда, описание и ключевые атрибуты одинаковы во всех источниках: сайт, Google My Business, Wikipedia, Crunchbase.",
+      generatedCode: `<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "${siteData.title}",
+  "url": "${siteData.url}",
+  "sameAs": [
+    "https://www.wikidata.org/wiki/QXXXXX",
+    "https://www.crunchbase.com/organization/ваш-бренд",
+    "https://github.com/ваш-бренд"
+  ]
+}
+</script>`,
+    });
+
+    fallbackRecs.push({
+      type: "semantic-tables",
+      title: "Добавьте сравнительные таблицы для AI-цитирования",
+      description:
+        "LLM-модели часто цитируют данные из таблиц при ответах на сравнительные вопросы. Добавьте HTML-таблицы со сравнением характеристик, цен или функциональности.",
+      generatedCode: `<table>
+  <caption>Сравнение тарифов ${siteData.title}</caption>
+  <thead>
+    <tr><th>Функция</th><th>Бесплатный</th><th>Про</th><th>Бизнес</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Отчёты в месяц</td><td>3</td><td>30</td><td>Безлимит</td></tr>
+    <tr><td>AI-анализ</td><td>Базовый</td><td>Глубокий</td><td>Enterprise</td></tr>
+  </tbody>
+</table>`,
+    });
+
+    fallbackRecs.push({
+      type: "platform-seeding",
+      title: "Разместите бренд на AI-индексируемых платформах",
+      description:
+        "AI-модели обучаются на данных из Wikipedia, Reddit, GitHub, StackOverflow и HuggingFace. Создайте страницу бренда на этих платформах с актуальной информацией и ссылками.",
+      generatedCode: "",
+    });
+
+    fallbackRecs.push({
+      type: "sentiment",
+      title: "Управляйте тональностью упоминаний бренда",
+      description:
+        "AI-модели учитывают тональность при ранжировании рекомендаций. Мониторьте упоминания бренда, отвечайте на негативные отзывы и генерируйте позитивный контент: кейсы, отзывы клиентов, пресс-релизы.",
+      generatedCode: "",
+    });
+
+    if (!siteData.semanticHtmlValid) {
+      fallbackRecs.push({
+        type: "semantic-html",
+        title: "Исправьте семантическую HTML-структуру",
+        description:
+          "AI-модели лучше извлекают информацию из страниц с правильной семантической разметкой: <main>, <article>, <section>, иерархия заголовков H1→H2→H3. Это повышает точность чанкинга при RAG-индексации.",
+        generatedCode: `<main>\n  <article>\n    <h1>Заголовок страницы</h1>\n    <section>\n      <h2>Раздел</h2>\n      <p>Контент раздела...</p>\n    </section>\n  </article>\n</main>`,
+      });
+    }
+
+    if (!siteData.robotsTxtAiFriendly) {
+      fallbackRecs.push({
+        type: "robots-txt",
+        title: "Откройте robots.txt для AI-ботов",
+        description:
+          `Ваш robots.txt блокирует AI-краулеры (${siteData.robotsTxtBlockedBots?.join(", ") || "GPTBot, ClaudeBot"}). Это критическая проблема — AI-поисковики не могут индексировать ваш сайт.`,
+        generatedCode: `# Разрешить AI-ботам\nUser-agent: GPTBot\nAllow: /\n\nUser-agent: ClaudeBot\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /`,
       });
     }
 

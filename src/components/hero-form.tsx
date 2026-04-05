@@ -73,6 +73,16 @@ export function HeroForm({ isAuthenticated }: HeroFormProps) {
     }
   }, []);
 
+  // Обработка отмены — сбрасываем форму для нового ввода
+  const handleCancel = useCallback(() => {
+    setActiveReportId(null);
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -215,6 +225,7 @@ export function HeroForm({ isAuthenticated }: HeroFormProps) {
         <ReportProgressBar
           reportId={activeReportId}
           onDismiss={handleDismiss}
+          onCancel={handleCancel}
         />
       )}
     </div>

@@ -15,6 +15,8 @@ interface SiteChecklistProps {
   siteTitle: string | null;
   siteDescription: string | null;
   siteH1: string | null;
+  robotsTxtAiFriendly: boolean;
+  semanticHtmlValid: boolean;
 }
 
 export function SiteChecklist({
@@ -24,6 +26,8 @@ export function SiteChecklist({
   siteTitle,
   siteDescription,
   siteH1,
+  robotsTxtAiFriendly,
+  semanticHtmlValid,
 }: SiteChecklistProps) {
   const items: ChecklistItem[] = [
     {
@@ -45,6 +49,20 @@ export function SiteChecklist({
         schemaOrgTypes.length > 0
           ? `Найдено: ${schemaOrgTypes.join(", ")}`
           : "Структурированные данные JSON-LD не обнаружены",
+    },
+    {
+      label: "robots.txt (AI-боты)",
+      status: robotsTxtAiFriendly ? "pass" : "fail",
+      detail: robotsTxtAiFriendly
+        ? "AI-боты (GPTBot, ClaudeBot, Google-Extended) не заблокированы"
+        : "Обнаружена блокировка AI-ботов — они не смогут индексировать ваш сайт",
+    },
+    {
+      label: "Семантический HTML",
+      status: semanticHtmlValid ? "pass" : "warn",
+      detail: semanticHtmlValid
+        ? "Найдены <main>/<article>, иерархия заголовков H1→H2 корректна"
+        : "Отсутствуют семантические теги (<main>, <article>) или нарушена иерархия заголовков",
     },
     {
       label: "Мета-заголовок (Title)",
