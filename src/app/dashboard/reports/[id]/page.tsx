@@ -29,6 +29,7 @@ import { ScoreHistoryChart } from "@/components/score-history-chart";
 import { ShareReportButton } from "@/components/share-report-button";
 import { DeleteButton } from "@/components/delete-button";
 import { VisibilityTrendChart } from "@/components/visibility-trend-chart-wrapper";
+import { ContentGaps, type ContentGapItem } from "@/components/content-gaps";
 
 export default async function ReportPage({
   params,
@@ -494,7 +495,59 @@ export default async function ReportPage({
             )}
           </div>
 
-          {/* ROW 4: Recommendations — Premium Panel */}
+          {/* ROW 4: Content Gaps — AI Content Spy */}
+          {(() => {
+            // Генерируем content gaps на основе реальных SoV-данных
+            const missedKeywords = report.shareOfVoices.filter((s) => !s.isMentioned);
+            const topCompetitorNames = Array.from(
+              new Set(
+                allCompetitors
+                  .map((c) => c.name.trim())
+                  .filter((n) => n.length > 0)
+              )
+            ).slice(0, 5);
+
+            const contentGaps: ContentGapItem[] = [];
+
+            // Gap из непокрытых ключевых запросов
+            if (missedKeywords.length > 0 && topCompetitorNames.length > 0) {
+              const kw1 = missedKeywords[0];
+              contentGaps.push({
+                topic: `Контент по теме «${kw1.keyword}»`,
+                competitorSource: topCompetitorNames[0],
+                aiInsight: `AI-системы не упоминают ваш бренд по запросу «${kw1.keyword}», но активно рекомендуют ${topCompetitorNames[0]}. У конкурента есть развёрнутый контент по этой теме.`,
+                actionText: "Сгенерировать ТЗ",
+              });
+            }
+
+            if (missedKeywords.length > 1 && topCompetitorNames.length > 0) {
+              const kw2 = missedKeywords[1];
+              const comp = topCompetitorNames[Math.min(1, topCompetitorNames.length - 1)];
+              contentGaps.push({
+                topic: `Экспертная статья: «${kw2.keyword}»`,
+                competitorSource: comp,
+                aiInsight: `По запросу «${kw2.keyword}» ИИ ссылается на контент ${comp}. Создайте глубокую статью с уникальными данными, чтобы перехватить этот трафик.`,
+                actionText: "Сгенерировать ТЗ",
+              });
+            }
+
+            // Gap по Schema.org
+            if (!report.hasLlmsTxt || schemaTypes.length === 0) {
+              contentGaps.push({
+                topic: !report.hasLlmsTxt ? "Файл llms.txt для AI-ботов" : "FAQ / глоссарий терминов",
+                competitorSource: topCompetitorNames[0] ?? "лидеры ниши",
+                aiInsight: !report.hasLlmsTxt
+                  ? "У ведущих конкурентов есть llms.txt — специальный файл, который помогает AI-системам лучше понять бренд. У вас он отсутствует."
+                  : "Конкуренты имеют структурированный FAQ со Schema.org (FAQPage). AI-системы активно используют такие данные для формирования ответов.",
+                actionText: "Сгенерировать файл",
+              });
+            }
+
+            if (contentGaps.length === 0) return null;
+            return <ContentGaps gaps={contentGaps} />;
+          })()}
+
+          {/* ROW 5: Recommendations — Premium Panel */}
           <RecommendationsPanel
             recommendations={report.recommendations.map((rec) => ({
               id: rec.id,

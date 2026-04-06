@@ -8,6 +8,7 @@ import {
   AnalysisResult,
   type AnalysisData,
 } from "@/components/analysis-result";
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
 const LS_KEY = "geo_active_report";
 
@@ -95,10 +96,20 @@ export function HeroForm({ isAuthenticated }: HeroFormProps) {
     // ── Авторизованный пользователь: полный отчёт через BullMQ ──
     if (isAuthenticated) {
       try {
+        // Compute device fingerprint for anti-abuse
+        let fingerprintId: string | undefined;
+        try {
+          const fp = await FingerprintJS.load();
+          const result = await fp.get();
+          fingerprintId = result.visitorId;
+        } catch {
+          // Fingerprint may fail in some browsers — proceed without it
+        }
+
         const res = await fetch("/api/reports/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: url.trim() }),
+          body: JSON.stringify({ url: url.trim(), fingerprintId }),
         });
 
         const data = await res.json();

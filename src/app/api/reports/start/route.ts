@@ -10,6 +10,7 @@ const REPORT_RATE_LIMIT = { maxRequests: 3, windowSeconds: 60 };
 
 interface StartReportBody {
   url: string;
+  fingerprintId?: string;
 }
 
 /**
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     // 3. Проверяем баланс кредитов (НЕ списываем — списание при COMPLETED)
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { credits: true, plan: true },
+      select: { credits: true, plan: true, authProvider: true },
     });
 
     if (!user) {
@@ -79,6 +80,59 @@ export async function POST(request: NextRequest) {
     }
 
     const limits = getPlanLimits(user.plan);
+
+    // ─── Hybrid Anti-Abuse (FREE tier only) ───────────────
+    if (user.plan === "FREE") {
+      // Rule 1: Max 1 completed/processing report per userId (universal)
+      const existingReportCount = await prisma.report.count({
+        where: {
+          project: { userId: session.user.id },
+          status: { in: ["COMPLETED", "PROCESSING"] },
+        },
+      });
+
+      if (existingReportCount >= 1) {
+        return NextResponse.json(
+          {
+            error: "Бесплатный аудит уже использован. Перейдите на тариф PRO для неограниченных отчётов.",
+            upgradeRequired: true,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Rule 2: For Credentials users — check device fingerprint
+      if (user.authProvider === "credentials") {
+        const fingerprintId = body.fingerprintId;
+
+        if (!fingerprintId) {
+          return NextResponse.json(
+            { error: "Не удалось определить устройство. Попробуйте обновить страницу." },
+            { status: 400 }
+          );
+        }
+
+        // Check if this fingerprint already generated a report
+        const fingerprintUsed = await prisma.report.findFirst({
+          where: {
+            fingerprintId,
+            status: { in: ["COMPLETED", "PROCESSING"] },
+          },
+          select: { id: true },
+        });
+
+        if (fingerprintUsed) {
+          return NextResponse.json(
+            {
+              error: "Бесплатный аудит уже был сгенерирован с этого устройства. Пожалуйста, перейдите на тариф PRO.",
+              upgradeRequired: true,
+            },
+            { status: 403 }
+          );
+        }
+      }
+      // Google OAuth users: only userId check above (Google's anti-spam is sufficient)
+    }
 
     if (user.credits < limits.reportCost) {
       return NextResponse.json(
@@ -159,6 +213,7 @@ export async function POST(request: NextRequest) {
       data: {
         projectId: project.id,
         status: "PROCESSING",
+        fingerprintId: body.fingerprintId || null,
       },
     });
 

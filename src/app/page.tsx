@@ -111,7 +111,7 @@ export default async function HomePage() {
             <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-[#787774]">
               <span className="flex items-center gap-1.5">
                 <Zap className="h-4 w-4 text-[#BBBBBB]" />
-                50 бесплатных кредитов
+                Первый аудит бесплатно
               </span>
               <span className="flex items-center gap-1.5">
                 <Clock className="h-4 w-4 text-[#BBBBBB]" />
@@ -365,14 +365,13 @@ export default async function HomePage() {
                 <span className="text-4xl font-bold tracking-tighter text-[#1a1a1a]">0</span>
                 <span className="text-lg font-normal text-[#BBBBBB]">₽<span className="text-sm">/мес</span></span>
               </div>
-              <p className="mt-2 text-xs text-[#BBBBBB]">50 кредитов при регистрации</p>
+              <p className="mt-2 text-xs text-[#BBBBBB]">Один бесплатный аудит</p>
 
               <ul className="mt-8 flex-1 space-y-3.5">
                 {[
-                  "5 отчётов (50 кредитов)",
+                  "1 бесплатный аудит (демо)",
                   "Share of Voice аналитика",
                   "Рекомендации с кодом",
-                  "1 проект",
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-[#777]">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#D5D5D5]" strokeWidth={2} />
@@ -410,7 +409,6 @@ export default async function HomePage() {
                   "20 отчётов/мес",
                   "Все AI-провайдеры",
                   "Анализ конкурентов",
-                  "До 10 проектов",
                   "Приоритетная генерация",
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-[#444]">
@@ -442,7 +440,6 @@ export default async function HomePage() {
                   "60 отчётов/мес",
                   "Все AI-провайдеры",
                   "API-доступ",
-                  "Безлимитные проекты",
                   "White-label отчёты",
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-[#777]">
@@ -486,7 +483,7 @@ export default async function HomePage() {
               <span className="text-[#787774]">думает ИИ?</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-[#787774]">
-              Первые 5 отчётов бесплатно. Без привязки карты.
+              Первый аудит бесплатно. Без привязки карты.
             </p>
             <div className="mt-8 flex items-center justify-center gap-3">
               <Link

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
 interface RerunReportButtonProps {
   projectUrl: string;
@@ -16,10 +17,20 @@ export function RerunReportButton({ projectUrl }: RerunReportButtonProps) {
   async function handleRerun() {
     setLoading(true);
     try {
+      // Compute fingerprint for anti-abuse
+      let fingerprintId: string | undefined;
+      try {
+        const fp = await FingerprintJS.load();
+        const result = await fp.get();
+        fingerprintId = result.visitorId;
+      } catch {
+        // proceed without fingerprint
+      }
+
       const res = await fetch("/api/reports/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: projectUrl }),
+        body: JSON.stringify({ url: projectUrl, fingerprintId }),
       });
 
       const data = await res.json();

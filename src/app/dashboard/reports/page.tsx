@@ -41,7 +41,7 @@ export default async function ReportsPage() {
             Нет отчётов
           </h3>
           <p className="mt-1 max-w-sm text-center text-sm text-[#787774]">
-            Отчёты появятся здесь после запуска анализа в одном из проектов.
+            Отчёты появятся здесь после запуска анализа на главной странице.
           </p>
         </div>
       ) : (

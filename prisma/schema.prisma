@@ -45,14 +45,15 @@ enum PaymentStatus {
 // ==========================================
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  plan      Plan     @default(FREE)
-  credits   Int      @default(50)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  password     String
+  plan         Plan     @default(FREE)
+  credits      Int      @default(50)
+  authProvider String   @default("credentials") // "credentials" | "google"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   projects      Project[]
   subscriptions Subscription[]
@@ -96,6 +97,9 @@ model Report {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  // ─── Anti-abuse fingerprint (для Credentials-пользователей) ──
+  fingerprintId String?
+
   // ─── Публичная ссылка ───────────────────────────────
   shareId      String?      @unique
 
@@ -127,6 +131,7 @@ model Report {
   recommendations Recommendation[]
 
   @@index([projectId])
+  @@index([fingerprintId])
 }
 
 model ShareOfVoice {
