@@ -9,6 +9,50 @@ import { ensureWorkerRunning } from "@/lib/worker-manager";
 // Rate limit: 3 запроса в минуту по userId
 const REPORT_RATE_LIMIT = { maxRequests: 3, windowSeconds: 60 };
 
+// ─── SSRF Protection ─────────────────────────────────────
+function isSafeUrl(urlString: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return false;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Block localhost variants
+  if (hostname === "localhost" || hostname === "localhost.localdomain") {
+    return false;
+  }
+
+  // Block IPv6 loopback
+  if (hostname === "[::1]" || hostname === "::1") {
+    return false;
+  }
+
+  // Check IPv4 private/reserved ranges
+  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const [, a, b, c] = ipv4Match.map(Number);
+    if (
+      a === 127 ||                            // 127.0.0.0/8 loopback
+      a === 10 ||                             // 10.0.0.0/8 private
+      (a === 172 && b >= 16 && b <= 31) ||    // 172.16.0.0/12 private
+      (a === 192 && b === 168) ||             // 192.168.0.0/16 private
+      (a === 169 && b === 254) ||             // 169.254.0.0/16 link-local + cloud metadata
+      a === 0                                 // 0.0.0.0/8
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 interface StartReportBody {
   url: string;
   fingerprintId?: string;
@@ -65,6 +109,14 @@ export async function POST(request: NextRequest) {
     let normalizedUrl = body.url.trim();
     if (!/^https?:\/\//i.test(normalizedUrl)) {
       normalizedUrl = `https://${normalizedUrl}`;
+    }
+
+    // SSRF Protection — блокируем внутренние адреса
+    if (!isSafeUrl(normalizedUrl)) {
+      return NextResponse.json(
+        { error: "Недопустимый URL-адрес. Использование локальных или приватных IP-адресов запрещено." },
+        { status: 400 }
+      );
     }
 
     // 3. Проверяем баланс кредитов (НЕ списываем — списание при COMPLETED)
