@@ -1,7 +1,7 @@
 /**
  * Playwright Scraper — парсит сайт и извлекает данные для GEO-анализа.
  *
- * Извлекает: title, description, h1, основной текст (до 3000 символов),
+ * Извлекает: title, description, h1, основной текст (до 15000 символов),
  * наличие /llms.txt, Schema.org (JSON-LD) данные.
  */
 
@@ -100,7 +100,7 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       .textContent()
       .catch(() => "");
 
-    // Основной текст страницы (до 3000 символов)
+    // Основной текст страницы (до 15000 символов)
     const bodyText = await page.evaluate(() => {
       const selectors = ["main", "article", '[role="main"]', "#content", ".content", "body"];
       for (const sel of selectors) {
@@ -109,13 +109,13 @@ export async function scrapeSite(url: string): Promise<SiteData> {
           return el.textContent
             .replace(/\s+/g, " ")
             .trim()
-            .slice(0, 3000);
+            .slice(0, 15000);
         }
       }
       return (document.body?.textContent ?? "")
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 3000);
+        .slice(0, 15000);
     });
 
     // ─── Schema.org (JSON-LD) ──────────────────────────
@@ -345,7 +345,7 @@ export async function scrapeSite(url: string): Promise<SiteData> {
         .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 3000);
+        .slice(0, 15000);
 
       // Schema.org extraction
       const schemaMatches = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];

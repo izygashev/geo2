@@ -91,6 +91,13 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     // ═══════════════════════════════════════════════════════
     console.log(`[Worker] ── Шаг 3/4: Проверка Share of Voice${multiLlm ? " (Multi-LLM)" : ""} ──`);
 
+    // Проверяем, не отменён ли отчёт перед дорогими API-вызовами
+    const checkBeforeSov = await db.report.findUnique({ where: { id: reportId }, select: { status: true } });
+    if (!checkBeforeSov || checkBeforeSov.status === "FAILED") {
+      console.log(`[Worker] 🛑 Отчёт ${reportId} отменён или удалён. Прерываю работу.`);
+      return;
+    }
+
     const sovResults: SovCheckResult[] = [];
     for (let i = 0; i < keywords.length; i++) {
       const kw = keywords[i];
@@ -128,6 +135,13 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     // ШАГ 4: Генерация рекомендаций и Score (Claude)
     // ═══════════════════════════════════════════════════════
     console.log(`[Worker] ── Шаг 4/4: Генерация рекомендаций ──`);
+
+    // Проверяем ещё раз перед дорогим вызовом Claude
+    const checkBeforeRec = await db.report.findUnique({ where: { id: reportId }, select: { status: true } });
+    if (!checkBeforeRec || checkBeforeRec.status === "FAILED") {
+      console.log(`[Worker] 🛑 Отчёт ${reportId} отменён или удалён. Прерываю работу.`);
+      return;
+    }
 
     const analysis = await generateRecommendations(siteData, sovResults);
 
