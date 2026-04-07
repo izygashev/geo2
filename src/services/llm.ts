@@ -359,7 +359,7 @@ URL: ${siteData.url}
 Title: ${siteData.title}
 Description: ${siteData.description}
 H1: ${siteData.h1}
-Content (first 1500 chars): ${siteData.bodyText.slice(0, 1500)}
+Content (first 15000 chars): ${siteData.bodyText.slice(0, 15000)}
 
 Return JSON in this exact format:
 {
@@ -451,13 +451,24 @@ CRITICAL RULES:
 
     try {
       const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
+
+      // Programmatic verification — не доверяем LLM self-reporting
+      const lowerDomain = domain.toLowerCase();
+      const actuallyMentioned = parsed.competitors.some(
+        (c) =>
+          c.name.toLowerCase().includes(lowerDomain) ||
+          (c.url && c.url.toLowerCase().includes(lowerDomain))
+      );
+
+      const isMentioned = actuallyMentioned || parsed.isMentioned;
+
       console.log(
-        `[LLM] ${parsed.isMentioned ? "✅" : "❌"} "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${parsed.isMentioned}, competitors: ${parsed.competitors.length}${parsed.sentiment ? `, sentiment: ${parsed.sentiment}` : ""}`
+        `[LLM] ${isMentioned ? "✅" : "❌"} "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${isMentioned}${actuallyMentioned !== parsed.isMentioned ? ` (corrected from ${parsed.isMentioned})` : ""}, competitors: ${parsed.competitors.length}${parsed.sentiment ? `, sentiment: ${parsed.sentiment}` : ""}`
       );
       return {
         keyword,
         llmProvider: "perplexity-sonar",
-        isMentioned: parsed.isMentioned,
+        isMentioned,
         mentionContext: parsed.mentionContext ?? "",
         sentiment: parsed.sentiment ?? undefined,
         categorySearched: parsed.categorySearched,
@@ -548,13 +559,24 @@ CRITICAL RULES:
 
       try {
         const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
+
+        // Programmatic verification — не доверяем LLM self-reporting
+        const lowerDomain = domain.toLowerCase();
+        const actuallyMentioned = parsed.competitors.some(
+          (c) =>
+            c.name.toLowerCase().includes(lowerDomain) ||
+            (c.url && c.url.toLowerCase().includes(lowerDomain))
+        );
+
+        const isMentioned = actuallyMentioned || parsed.isMentioned;
+
         console.log(
-          `[LLM] ${parsed.isMentioned ? "✅" : "❌"} [${model.name}] "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${parsed.isMentioned}`
+          `[LLM] ${isMentioned ? "✅" : "❌"} [${model.name}] "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${isMentioned}${actuallyMentioned !== parsed.isMentioned ? ` (corrected from ${parsed.isMentioned})` : ""}`
         );
         results.push({
           keyword,
           llmProvider: model.name.toLowerCase(),
-          isMentioned: parsed.isMentioned,
+          isMentioned,
           mentionContext: parsed.mentionContext ?? "",
           sentiment: parsed.sentiment ?? undefined,
           categorySearched: parsed.categorySearched,
@@ -632,7 +654,7 @@ Return ONLY valid JSON, no markdown or explanations.`;
 - Schema.org types: [${siteData.schemaOrgTypes.join(", ")}]
 - robots.txt AI-friendly: ${siteData.robotsTxtAiFriendly}${siteData.robotsTxtBlockedBots.length > 0 ? ` (blocked bots: ${siteData.robotsTxtBlockedBots.join(", ")})` : ""}
 - Semantic HTML valid: ${siteData.semanticHtmlValid} (main: ${siteData.semanticHtmlDetails.hasMain}, article: ${siteData.semanticHtmlDetails.hasArticle}, heading hierarchy OK: ${siteData.semanticHtmlDetails.headingHierarchyOk})
-- Content preview: ${siteData.bodyText.slice(0, 1000)}
+- Content preview: ${siteData.bodyText.slice(0, 15000)}
 
 ## Share of Voice Results
 - Category/Niche identified: ${categories.join(", ") || "unknown"}
