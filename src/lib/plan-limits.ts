@@ -43,7 +43,7 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
     maxConcurrentReports: 3,
     maxScheduledProjects: 5,
     projectCooldownSeconds: 2 * 60, // 2 минуты
-    reportCost: 10,
+    reportCost: 30, // Multi-LLM: 3 модели × ~10 = 30
     competitorBenchmark: true,
     benchmarkCost: 25,
     multiLlm: true,
@@ -51,10 +51,10 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
   },
   AGENCY: {
     maxProjects: 100,
-    maxConcurrentReports: 10,
+    maxConcurrentReports: 5, // Playwright RAM safety cap
     maxScheduledProjects: 100,
     projectCooldownSeconds: 60, // 1 минута
-    reportCost: 10,
+    reportCost: 30, // Multi-LLM: 3 модели × ~10 = 30
     competitorBenchmark: true,
     benchmarkCost: 25,
     multiLlm: true,

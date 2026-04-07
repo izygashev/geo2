@@ -26,8 +26,8 @@ interface PlanLimits {
 
 const PLAN_LIMITS: Record<string, PlanLimits> = {
   FREE:   { reportCost: 10, multiLlm: false, maxScheduledProjects: 0 },
-  PRO:    { reportCost: 10, multiLlm: true,  maxScheduledProjects: 5 },
-  AGENCY: { reportCost: 10, multiLlm: true,  maxScheduledProjects: 100 },
+  PRO:    { reportCost: 30, multiLlm: true,  maxScheduledProjects: 5 },
+  AGENCY: { reportCost: 30, multiLlm: true,  maxScheduledProjects: 100 },
 };
 
 function getPlanLimits(plan: string): PlanLimits {
