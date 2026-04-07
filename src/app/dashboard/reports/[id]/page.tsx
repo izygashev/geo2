@@ -90,15 +90,37 @@ export default async function ReportPage({
   const currentIdx = scoreHistory.findIndex((r) => r.id === report.id);
   const prevReport = currentIdx > 0 ? scoreHistory[currentIdx - 1] : null;
 
+  // ─── Extract target brand from URL ────────────────────
+  const targetBrand = (() => {
+    try {
+      const hostname = new URL(report.project.url).hostname.replace(/^www\./, "");
+      // "civitai.com" → "civitai", "my-brand.co.uk" → "my-brand"
+      return hostname.split(".")[0].toLowerCase();
+    } catch {
+      return report.project.name.toLowerCase();
+    }
+  })();
+
   // Compute metrics
   const sovTotal = report.shareOfVoices.length;
   const sovMentioned = report.shareOfVoices.filter((s) => s.isMentioned).length;
   const sovPercent = sovTotal > 0 ? Math.round((sovMentioned / sovTotal) * 100) : 0;
 
-  // Collect competitors from SoV
-  const allCompetitors = report.shareOfVoices.flatMap((sov) => {
+  // Collect competitors from SoV — filter out the target brand
+  const allCompetitorsRaw = report.shareOfVoices.flatMap((sov) => {
     const comps = sov.competitors as { name: string; url?: string }[];
     return Array.isArray(comps) ? comps : [];
+  });
+
+  const allCompetitors = allCompetitorsRaw.filter((c) => {
+    const name = c.name.toLowerCase().trim();
+    const url = (c.url ?? "").toLowerCase();
+    // Filter out the target brand by name or URL match
+    return (
+      !name.includes(targetBrand) &&
+      !targetBrand.includes(name.replace(/\s+/g, "")) &&
+      !url.includes(targetBrand)
+    );
   });
 
   // Schema.org types
@@ -200,10 +222,10 @@ export default async function ReportPage({
         <div className="flex flex-col items-center gap-4 rounded-xl border border-[#C8E1FE] bg-[#E1F3FE] p-16 text-center">
           <Loader2 className="h-8 w-8 animate-spin text-[#1A6FBF]" />
           <p className="text-sm font-medium text-[#1a1a1a]">
-            Отчёт обрабатывается…
+            Анализируем ваш сайт…
           </p>
           <p className="text-sm text-[#787774]">
-            Playwright анализирует сайт, AI проверяет упоминания. Обычно 1–2 минуты.
+            Проверяем, как нейросети видят и рекомендуют ваш бренд. Обычно 1–2 минуты.
           </p>
         </div>
       )}
@@ -251,40 +273,46 @@ export default async function ReportPage({
 
             {/* Score Ring */}
             <div className="lg:col-span-4 rounded-xl border border-[#EAEAEA] bg-white p-6 flex flex-col items-center justify-center">
-              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-4">
-                AI Visibility Score
+              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
+                Видимость в ИИ
+              </p>
+              <p className="text-[11px] text-[#BBBBBB] mb-4 text-center max-w-[200px]">
+                Насколько хорошо нейросети знают и рекомендуют ваш бренд
               </p>
               <ScoreRing score={report.overallScore ?? 0} />
             </div>
 
             {/* Score Breakdown bars */}
             <div className="lg:col-span-4 rounded-xl border border-[#EAEAEA] bg-white p-6">
-              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-5">
-                Детализация Score
+              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
+                Из чего складывается оценка
+              </p>
+              <p className="text-[11px] text-[#BBBBBB] mb-5">
+                Каждый фактор влияет на то, рекомендуют ли вас нейросети
               </p>
               <div className="space-y-4">
                 <ScoreBreakdownBar
-                  label="Share of Voice"
+                  label="Узнаваемость в ИИ"
                   value={report.scoreSov ?? sovPercent}
                   icon={<Search className="h-3.5 w-3.5" />}
                 />
                 <ScoreBreakdownBar
-                  label="Schema.org"
+                  label="Разметка для роботов"
                   value={report.scoreSchema ?? (schemaTypes.length > 0 ? 60 : 0)}
                   icon={<FileText className="h-3.5 w-3.5" />}
                 />
                 <ScoreBreakdownBar
-                  label="llms.txt"
+                  label="Визитка для ИИ (llms.txt)"
                   value={report.scoreLlmsTxt ?? (report.hasLlmsTxt ? 80 : 0)}
                   icon={<Zap className="h-3.5 w-3.5" />}
                 />
                 <ScoreBreakdownBar
-                  label="Контент"
+                  label="Качество контента"
                   value={report.scoreContent ?? 50}
                   icon={<BarChart3 className="h-3.5 w-3.5" />}
                 />
                 <ScoreBreakdownBar
-                  label="Авторитет"
+                  label="Репутация бренда"
                   value={report.scoreAuthority ?? 30}
                   icon={<Shield className="h-3.5 w-3.5" />}
                 />
@@ -297,7 +325,7 @@ export default async function ReportPage({
               <div className="rounded-xl border border-[#EAEAEA] bg-white p-5">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-2">
                   <Search className="h-3.5 w-3.5" />
-                  Share of Voice
+                  Узнаваемость в ИИ
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold tracking-tighter text-[#1a1a1a]">
@@ -307,7 +335,7 @@ export default async function ReportPage({
                     ({sovMentioned} из {sovTotal})
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-[#787774]">запросов с упоминанием бренда</p>
+                <p className="mt-1 text-xs text-[#787774]">Как часто нейросети советуют вас, а не конкурентов</p>
                 {/* Sentiment badge */}
                 {report.sentiment && (
                   <div className="mt-2">
@@ -337,28 +365,28 @@ export default async function ReportPage({
               <div className="rounded-xl border border-[#EAEAEA] bg-white p-5">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-2">
                   <Lightbulb className="h-3.5 w-3.5" />
-                  Рекомендации
+                  Что можно улучшить
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold tracking-tighter text-[#1a1a1a]">
                     {report.recommendations.length}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-[#787774]">точек роста найдено</p>
+                <p className="mt-1 text-xs text-[#787774]">конкретных действий для роста видимости</p>
               </div>
 
               {/* Competitors count */}
               <div className="rounded-xl border border-[#EAEAEA] bg-white p-5">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-2">
                   <Users className="h-3.5 w-3.5" />
-                  Конкуренты
+                  Конкуренты в вашей нише
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold tracking-tighter text-[#1a1a1a]">
                     {new Set(allCompetitors.map((c) => c.name.toLowerCase().trim())).size}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-[#787774]">уникальных конкурентов найдено</p>
+                <p className="mt-1 text-xs text-[#787774]">брендов, которых нейросети рекомендуют в вашей нише</p>
               </div>
             </div>
           </div>
@@ -367,9 +395,12 @@ export default async function ReportPage({
           <div className="grid gap-4 lg:grid-cols-12">
             {/* SoV visualization */}
             <div className="lg:col-span-7 rounded-xl border border-[#EAEAEA] bg-white p-6">
-              <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-6">
-                Share of Voice — детальный анализ
+              <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
+                Узнаваемость в ИИ — по каждому запросу
               </h2>
+              <p className="text-[11px] text-[#BBBBBB] mb-6">
+                Мы спросили нейросети о вашей нише. Вот где вас рекомендуют, а где — нет.
+              </p>
 
               {sovTotal > 0 ? (
                 <>
@@ -391,7 +422,7 @@ export default async function ReportPage({
                   {/* Detailed SoV table */}
                   <div className="mt-6 border-t border-[#F0EFEB] pt-5">
                     <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-3">
-                      Результаты по запросам
+                      Что ответили нейросети
                     </p>
                     <div className="space-y-2">
                       {report.shareOfVoices.map((sov, i) => (
@@ -419,7 +450,11 @@ export default async function ReportPage({
                                 </p>
                               )}
                               {(() => {
-                                const comps = sov.competitors as { name: string }[];
+                                const comps = (sov.competitors as { name: string }[])
+                                  ?.filter((c) => {
+                                    const n = c.name.toLowerCase().trim();
+                                    return !n.includes(targetBrand) && !targetBrand.includes(n.replace(/\s+/g, ""));
+                                  });
                                 if (!Array.isArray(comps) || comps.length === 0) return null;
                                 return (
                                   <div className="mt-1.5 flex flex-wrap gap-1">
@@ -452,7 +487,7 @@ export default async function ReportPage({
               ) : (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <Search className="h-5 w-5 text-[#BBBBBB]" />
-                  <p className="text-[#787774] text-sm">Данные Share of Voice отсутствуют</p>
+                  <p className="text-[#787774] text-sm">Мы пока не нашли данных об упоминаниях вашего бренда</p>
                 </div>
               )}
             </div>
@@ -474,14 +509,14 @@ export default async function ReportPage({
 
           {/* ROW 3: Competitors — всегда показываем */}
           <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
-            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-5">
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
               <Users className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" />
-              Конкуренты в AI-поисковиках
+              Топ AI-рекомендаций в вашей нише
             </h2>
             <p className="text-sm text-[#787774] mb-5">
               {allCompetitors.length > 0
-                ? "Бренды, которые AI-системы рекомендуют в вашей нише"
-                : "AI-системы пока не определили конкурентов в этой нише"}
+                ? "Бренды, которые нейросети чаще всего рекомендуют по запросам вашей ниши. Чем выше число — тем чаще."
+                : "Нейросети пока не определили прямых конкурентов в этой нише."}
             </p>
             {allCompetitors.length > 0 ? (
               <CompetitorsTable competitors={allCompetitors} isPro={isPro} />
@@ -489,7 +524,7 @@ export default async function ReportPage({
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <Users className="h-5 w-5 text-[#BBBBBB]" />
                 <p className="text-sm text-[#787774]">
-                  Данные о конкурентах будут доступны после следующего анализа
+                  После следующего анализа здесь появятся бренды-конкуренты, которые нейросети рекомендуют в вашей нише
                 </p>
               </div>
             )}
@@ -497,6 +532,9 @@ export default async function ReportPage({
 
           {/* ROW 4: Content Gaps — AI Content Spy */}
           {(() => {
+            // Типы рекомендаций, которые уже есть в Плане действий — не дублируем в Упущенных темах
+            const existingRecTypes = new Set(report.recommendations.map((r) => r.type));
+
             // Генерируем content gaps на основе реальных SoV-данных
             const missedKeywords = report.shareOfVoices.filter((s) => !s.isMentioned);
             const topCompetitorNames = Array.from(
@@ -509,42 +547,62 @@ export default async function ReportPage({
 
             const contentGaps: ContentGapItem[] = [];
 
-            // Gap из непокрытых ключевых запросов
-            if (missedKeywords.length > 0 && topCompetitorNames.length > 0) {
-              const kw1 = missedKeywords[0];
-              contentGaps.push({
-                topic: `Контент по теме «${kw1.keyword}»`,
-                competitorSource: topCompetitorNames[0],
-                aiInsight: `AI-системы не упоминают ваш бренд по запросу «${kw1.keyword}», но активно рекомендуют ${topCompetitorNames[0]}. У конкурента есть развёрнутый контент по этой теме.`,
-                actionText: "Сгенерировать ТЗ",
-              });
+            // Gap из непокрытых ключевых запросов (только если нет content/rag-content рекомендаций)
+            if (!existingRecTypes.has("content") && !existingRecTypes.has("rag-content")) {
+              if (missedKeywords.length > 0 && topCompetitorNames.length > 0) {
+                const kw1 = missedKeywords[0];
+                contentGaps.push({
+                  topic: `Контент по теме «${kw1.keyword}»`,
+                  competitorSource: topCompetitorNames[0],
+                  aiInsight: `Когда клиенты спрашивают нейросеть «${kw1.keyword}», она рекомендует ${topCompetitorNames[0]}, а не вас. У конкурента есть подробный материал на эту тему.`,
+                  actionText: "Создать контент",
+                  actionType: "content",
+                });
+              }
+
+              if (missedKeywords.length > 1 && topCompetitorNames.length > 0) {
+                const kw2 = missedKeywords[1];
+                const comp = topCompetitorNames[Math.min(1, topCompetitorNames.length - 1)];
+                contentGaps.push({
+                  topic: `Экспертная статья: «${kw2.keyword}»`,
+                  competitorSource: comp,
+                  aiInsight: `По запросу «${kw2.keyword}» ИИ ссылается на ${comp}. Напишите глубокий материал с уникальными данными — и нейросети начнут ссылаться на вас.`,
+                  actionText: "Создать контент",
+                  actionType: "content",
+                });
+              }
             }
 
-            if (missedKeywords.length > 1 && topCompetitorNames.length > 0) {
-              const kw2 = missedKeywords[1];
-              const comp = topCompetitorNames[Math.min(1, topCompetitorNames.length - 1)];
+            // Gap по llms.txt — только если нет llms-txt рекомендации в плане
+            if (!report.hasLlmsTxt && !existingRecTypes.has("llms-txt")) {
               contentGaps.push({
-                topic: `Экспертная статья: «${kw2.keyword}»`,
-                competitorSource: comp,
-                aiInsight: `По запросу «${kw2.keyword}» ИИ ссылается на контент ${comp}. Создайте глубокую статью с уникальными данными, чтобы перехватить этот трафик.`,
-                actionText: "Сгенерировать ТЗ",
-              });
-            }
-
-            // Gap по Schema.org
-            if (!report.hasLlmsTxt || schemaTypes.length === 0) {
-              contentGaps.push({
-                topic: !report.hasLlmsTxt ? "Файл llms.txt для AI-ботов" : "FAQ / глоссарий терминов",
+                topic: "Визитка для нейросетей (llms.txt)",
                 competitorSource: topCompetitorNames[0] ?? "лидеры ниши",
-                aiInsight: !report.hasLlmsTxt
-                  ? "У ведущих конкурентов есть llms.txt — специальный файл, который помогает AI-системам лучше понять бренд. У вас он отсутствует."
-                  : "Конкуренты имеют структурированный FAQ со Schema.org (FAQPage). AI-системы активно используют такие данные для формирования ответов.",
-                actionText: "Сгенерировать файл",
+                aiInsight: "У лидеров ниши есть специальный файл-визитка, по которому нейросети узнают бренд. У вас такого файла нет — ИИ вас просто не видит. Сохраните этот код в файл llms.txt и загрузите его в корневую папку вашего сайта (чтобы он открывался по адресу ваш-сайт.com/llms.txt).",
+                actionText: "Создать визитку",
+                actionType: "llms-txt",
+              });
+            }
+
+            // Gap по FAQ — только если нет schema-faq рекомендации в плане
+            if (schemaTypes.length === 0 && report.hasLlmsTxt && !existingRecTypes.has("schema-faq")) {
+              contentGaps.push({
+                topic: "FAQ / глоссарий терминов",
+                competitorSource: topCompetitorNames[0] ?? "лидеры ниши",
+                aiInsight: "У конкурентов есть структурированный раздел «Вопрос-ответ». Нейросети активно берут из него информацию для своих ответов.",
+                actionText: "Создать FAQ",
+                actionType: "faq",
               });
             }
 
             if (contentGaps.length === 0) return null;
-            return <ContentGaps gaps={contentGaps} />;
+            return (
+              <ContentGaps
+                gaps={contentGaps}
+                projectUrl={report.project.url}
+                siteTitle={report.siteTitle ?? report.project.name}
+              />
+            );
           })()}
 
           {/* ROW 5: Recommendations — Premium Panel */}

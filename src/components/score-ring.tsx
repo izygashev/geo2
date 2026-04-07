@@ -7,22 +7,22 @@ interface ScoreRingProps {
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 70) return "#2D6A4F";
-  if (score >= 40) return "#B08D19";
+  if (score >= 80) return "#2D6A4F";
+  if (score >= 50) return "#B08D19";
   return "#B02A37";
 }
 
 function getScoreLabel(score: number): string {
-  if (score >= 80) return "Отлично";
-  if (score >= 60) return "Хорошо";
-  if (score >= 40) return "Средне";
-  if (score >= 20) return "Слабо";
-  return "Критично";
+  if (score >= 80) return "ИИ вас отлично знает";
+  if (score >= 60) return "Хороший старт";
+  if (score >= 50) return "Есть над чем работать";
+  if (score >= 20) return "ИИ вас почти не знает";
+  return "ИИ вас не видит";
 }
 
 function getScoreBg(score: number): string {
-  if (score >= 70) return "bg-[#EDF3EC]";
-  if (score >= 40) return "bg-[#FBF3DB]";
+  if (score >= 80) return "bg-[#EDF3EC]";
+  if (score >= 50) return "bg-[#FBF3DB]";
   return "bg-[#FDEBEC]";
 }
 
@@ -93,7 +93,7 @@ interface MiniScoreBarProps {
 export function ScoreBreakdownBar({ label, value, icon }: MiniScoreBarProps) {
   const color = getScoreColor(value);
   const bgColor =
-    value >= 70 ? "bg-[#2D6A4F]" : value >= 40 ? "bg-[#B08D19]" : "bg-[#B02A37]";
+    value >= 80 ? "bg-[#2D6A4F]" : value >= 50 ? "bg-[#B08D19]" : "bg-[#B02A37]";
 
   return (
     <div className="space-y-2">

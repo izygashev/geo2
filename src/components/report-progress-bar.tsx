@@ -23,18 +23,9 @@ interface StatusResponse {
   overallScore: number | null;
   projectName: string;
   projectUrl: string;
+  progress: number;
+  step: string;
 }
-
-const PROGRESS_STEPS = [
-  "Подключаемся к сайту...",
-  "Сканируем структуру и контент...",
-  "Проверяем Schema.org разметку...",
-  "Ищем llms.txt...",
-  "Анализируем AI-видимость...",
-  "Сравниваем с конкурентами...",
-  "Генерируем стратегию...",
-  "Финализируем отчёт...",
-];
 
 const LS_KEY = "geo_active_report";
 
@@ -57,9 +48,10 @@ export function ReportProgressBar({
   onCancel,
 }: ReportProgressBarProps) {
   const router = useRouter();
-  const [stepIndex, setStepIndex] = useState(0);
-  const [fakeProgress, setFakeProgress] = useState(5);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // Сглаженный прогресс — плавно догоняет реальный
+  const [smoothProgress, setSmoothProgress] = useState(2);
 
   // Храним финальный результат отдельно — SWR сбрасывает data при key=null
   const [finalResult, setFinalResult] = useState<{
@@ -75,32 +67,22 @@ export function ReportProgressBar({
     shouldPoll ? `/api/reports/${reportId}/status` : null,
     fetcher,
     {
-      refreshInterval: 3000,
+      refreshInterval: 2000, // Чаще, т.к. реальный прогресс
       revalidateOnFocus: true,
       errorRetryCount: 10,
       errorRetryInterval: 3000,
     }
   );
 
-  // Когда получаем финальный статус — сохраняем его в отдельный стейт
-  // Это предотвращает потерю данных при остановке SWR
+  // Реальный прогресс и шаг от сервера
+  const realProgress = data?.progress ?? 0;
+  const stepText = data?.step ?? "Ожидание в очереди...";
+
+  // Когда получаем финальный статус — сохраняем его
   useEffect(() => {
     if (!data) return;
 
-    if (data.status === "COMPLETED") {
-      // COMPLETED — финальный, останавливаем polling
-      setFinalResult({
-        status: data.status,
-        overallScore: data.overallScore,
-        projectUrl: data.projectUrl,
-      });
-      try {
-        localStorage.removeItem(LS_KEY);
-      } catch {
-        // ignore
-      }
-    } else if (data.status === "FAILED") {
-      // FAILED — финальный, останавливаем polling
+    if (data.status === "COMPLETED" || data.status === "FAILED") {
       setFinalResult({
         status: data.status,
         overallScore: data.overallScore,
@@ -112,7 +94,6 @@ export function ReportProgressBar({
         // ignore
       }
     }
-    // Если status === "PROCESSING" — продолжаем polling (не трогаем finalResult)
   }, [data]);
 
   // Обработка мёртвых ошибок (404/403)
@@ -131,38 +112,29 @@ export function ReportProgressBar({
   const isFailed = finalResult?.status === "FAILED";
   const isDone = isCompleted || isFailed || errorDead;
 
-  // Фейковый прогресс-бар (замедляясь к 90%)
+  // Сглаживание прогресса — плавно подтягивается к реальному значению
   useEffect(() => {
     if (isDone) {
       if (isCompleted) {
-        setFakeProgress(100);
+        setSmoothProgress(100);
       }
       return;
     }
 
     const interval = setInterval(() => {
-      setFakeProgress((prev: number) => {
-        if (prev >= 90) return prev;
-        const increment = Math.max(0.5, (90 - prev) * 0.04);
-        return Math.min(90, prev + increment);
+      setSmoothProgress((prev) => {
+        if (prev >= realProgress) return prev;
+        // Быстро догоняем реальный прогресс
+        const diff = realProgress - prev;
+        const increment = Math.max(0.5, diff * 0.15);
+        return Math.min(realProgress, prev + increment);
       });
-    }, 500);
+    }, 200);
 
     return () => clearInterval(interval);
-  }, [isDone, isCompleted]);
+  }, [isDone, isCompleted, realProgress]);
 
-  // Меняющийся текст шагов
-  useEffect(() => {
-    if (isDone) return;
-
-    const interval = setInterval(() => {
-      setStepIndex((prev: number) => (prev + 1) % PROGRESS_STEPS.length);
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [isDone]);
-
-  // URL проекта — берём из data (пока поллим) или из finalResult
+  // URL проекта
   const displayUrl = data?.projectUrl ?? finalResult?.projectUrl ?? "Обработка...";
 
   function handleClick() {
@@ -190,7 +162,7 @@ export function ReportProgressBar({
         <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
           <div
             className={`
-              h-full rounded-full transition-all duration-500 ease-out
+              h-full rounded-full transition-all duration-300 ease-out
               ${
                 isCompleted
                   ? "bg-emerald-500"
@@ -200,7 +172,7 @@ export function ReportProgressBar({
               }
             `}
             style={{
-              width: `${isDone ? (isCompleted ? 100 : fakeProgress) : fakeProgress}%`,
+              width: `${isDone ? (isCompleted ? 100 : smoothProgress) : smoothProgress}%`,
             }}
           />
         </div>
@@ -230,7 +202,7 @@ export function ReportProgressBar({
                   ? `Отчёт готов — Score: ${finalResult?.overallScore ?? "—"}/100`
                   : isFailed || errorDead
                     ? "Ошибка генерации отчёта"
-                    : PROGRESS_STEPS[stepIndex]}
+                    : stepText}
               </p>
               <p className="mt-0.5 truncate text-xs text-zinc-400">
                 {displayUrl}
@@ -297,7 +269,7 @@ export function ReportProgressBar({
                   )}
                 </button>
                 <span className="text-xs tabular-nums text-zinc-400">
-                  {Math.round(fakeProgress)}%
+                  {Math.round(smoothProgress)}%
                 </span>
               </div>
             )}

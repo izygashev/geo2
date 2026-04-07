@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import {
   BarChart3,
   TrendingUp,
+  TrendingDown,
   Globe,
   Code2,
   Check,
@@ -10,6 +11,11 @@ import {
   Search,
   Zap,
   Clock,
+  ShieldAlert,
+  Ghost,
+  FileWarning,
+  DollarSign,
+  Bot,
 } from "lucide-react";
 import { HeroForm } from "@/components/hero-form";
 import { FaqAccordion } from "@/components/faq-accordion";
@@ -166,17 +172,121 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ─── Pain Points — PAS Framework ─── */}
+      <section className="py-24 lg:py-32">
+        <div className="mx-auto max-w-5xl px-6">
+          {/* Header */}
+          <div className="text-center">
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+              Проблема
+            </p>
+            <h2 className="mx-auto max-w-2xl text-2xl font-bold tracking-tighter text-[#1a1a1a] md:text-3xl">
+              Почему классическое SEO
+              <br className="hidden sm:block" />
+              <span className="text-[#787774]">больше не работает?</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-[#787774] sm:text-base">
+              Нейросети изменили правила игры. Пока вы покупаете ссылки,
+              <br className="hidden sm:block" />
+              ваши клиенты задают вопросы ChatGPT.
+            </p>
+          </div>
+
+          {/* Pain Points Grid */}
+          <div className="mt-14 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {/* Card 1 */}
+            <div className="group rounded-2xl border border-[#EAEAEA]/80 bg-white p-6 transition-all duration-300 hover:border-[#D5D5D5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-xl bg-red-50">
+                <TrendingDown className="h-4 w-4 text-red-500" strokeWidth={1.5} />
+              </div>
+              <h3 className="mb-2 text-[15px] font-semibold tracking-tight text-[#1a1a1a]">
+                Потеря горячего трафика
+              </h3>
+              <p className="text-sm leading-relaxed text-[#787774]">
+                Пользователи не ищут в Google. Они просят ИИ: «Посоветуй лучший сервис». Если алгоритм вас не знает, вы теряете лиды на самом дне воронки.
+              </p>
+            </div>
+
+            {/* Card 2 */}
+            <div className="group rounded-2xl border border-[#EAEAEA]/80 bg-white p-6 transition-all duration-300 hover:border-[#D5D5D5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50">
+                <ShieldAlert className="h-4 w-4 text-amber-600" strokeWidth={1.5} />
+              </div>
+              <h3 className="mb-2 text-[15px] font-semibold tracking-tight text-[#1a1a1a]">
+                ИИ-галлюцинации о бренде
+              </h3>
+              <p className="text-sm leading-relaxed text-[#787774]">
+                Нейросети могут выдумывать факты, заявлять о закрытии вашей компании или приписывать вам несуществующий негатив. Без мониторинга вы об этом даже не узнаете.
+              </p>
+            </div>
+
+            {/* Card 3 */}
+            <div className="group rounded-2xl border border-[#EAEAEA]/80 bg-white p-6 transition-all duration-300 hover:border-[#D5D5D5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50">
+                <Ghost className="h-4 w-4 text-purple-600" strokeWidth={1.5} />
+              </div>
+              <h3 className="mb-2 text-[15px] font-semibold tracking-tight text-[#1a1a1a]">
+                Слепота промптов
+              </h3>
+              <p className="text-sm leading-relaxed text-[#787774]">
+                Сбор семантики через Wordstat мертв. Клиенты пишут длинные запросы со сложным контекстом. Вы не знаете, как выглядит реальный спрос в эпоху LLM.
+              </p>
+            </div>
+
+            {/* Card 4 */}
+            <div className="group rounded-2xl border border-[#EAEAEA]/80 bg-white p-6 transition-all duration-300 hover:border-[#D5D5D5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
+                <FileWarning className="h-4 w-4 text-blue-600" strokeWidth={1.5} />
+              </div>
+              <h3 className="mb-2 text-[15px] font-semibold tracking-tight text-[#1a1a1a]">
+                Невидимый контент
+              </h3>
+              <p className="text-sm leading-relaxed text-[#787774]">
+                Вы пишете красивые тексты для людей, но RAG-алгоритмы их не понимают. Они спотыкаются о метафоры и игнорируют ваши страницы при парсинге.
+              </p>
+            </div>
+
+            {/* Card 5 */}
+            <div className="group rounded-2xl border border-[#EAEAEA]/80 bg-white p-6 transition-all duration-300 hover:border-[#D5D5D5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50">
+                <DollarSign className="h-4 w-4 text-emerald-600" strokeWidth={1.5} />
+              </div>
+              <h3 className="mb-2 text-[15px] font-semibold tracking-tight text-[#1a1a1a]">
+                Слив PR-бюджетов
+              </h3>
+              <p className="text-sm leading-relaxed text-[#787774]">
+                Стандартные закупки SEO-ссылок больше не дают эффекта. ИИ доверяет только узкому пулу трастовых баз данных и платформ. Вы платите за воздух.
+              </p>
+            </div>
+            {/* Card 6 */}
+            <div className="group rounded-2xl border border-[#EAEAEA]/80 bg-white p-6 transition-all duration-300 hover:border-[#D5D5D5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50">
+                <Bot className="h-4 w-4 text-slate-600" strokeWidth={1.5} />
+              </div>
+              <h3 className="mb-2 text-[15px] font-semibold tracking-tight text-[#1a1a1a]">
+                Техническая слепота
+              </h3>
+              <p className="text-sm leading-relaxed text-[#787774]">
+                У вас нет файла llms.txt, микроразметки FAQ и семантического HTML. ИИ-агенты даже не пытаются парсить ваш сайт — для них вы просто не существуете.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── Features — Premium Bento Grid ─── */}
       <section id="features" className="py-24 lg:py-32">
         <div className="mx-auto max-w-5xl px-6">
-          <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-            Возможности
-          </p>
-          <h2 className="mb-16 max-w-lg text-2xl font-bold tracking-tighter md:text-3xl">
-            Всё, что нужно для оптимизации
-            <br className="hidden md:block" />
-            <span className="text-[#787774]">AI-видимости вашего бренда</span>
-          </h2>
+          <div className="text-center">
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+              Возможности
+            </p>
+            <h2 className="mx-auto mb-16 max-w-lg text-2xl font-bold tracking-tighter md:text-3xl">
+              Всё, что нужно для оптимизации
+              <br className="hidden md:block" />
+              <span className="text-[#787774]">AI-видимости вашего бренда</span>
+            </h2>
+          </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {/* ── Card 1: Share of Voice — wide ── */}
@@ -463,12 +573,14 @@ export default async function HomePage() {
       {/* ─── FAQ ─── */}
       <section className="border-t border-[#EAEAEA] py-24 lg:py-32">
         <div className="mx-auto max-w-5xl px-6">
+        <div className="text-center">
           <p className="mb-3 text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
             FAQ
           </p>
           <h2 className="mb-14 text-2xl font-bold tracking-tighter md:text-3xl">
             Частые вопросы
           </h2>
+        </div>
           <FaqAccordion />
         </div>
       </section>

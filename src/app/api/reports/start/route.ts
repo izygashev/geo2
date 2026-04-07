@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { reportQueue } from "@/lib/queue";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getPlanLimits } from "@/lib/plan-limits";
+import { ensureWorkerRunning } from "@/lib/worker-manager";
 
 // Rate limit: 3 запроса в минуту по userId
 const REPORT_RATE_LIMIT = { maxRequests: 3, windowSeconds: 60 };
@@ -217,7 +218,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 6. Добавляем задачу в очередь BullMQ
+    // 6. Добавляем задачу в очередь BullMQ (воркер стартует автоматически)
+    ensureWorkerRunning();
+
     await reportQueue.add(
       "generate-report",
       {

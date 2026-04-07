@@ -31,10 +31,23 @@ export default async function SharedReportPage({
   const sovMentioned = report.shareOfVoices.filter((s) => s.isMentioned).length;
   const sovPercent = sovTotal > 0 ? Math.round((sovMentioned / sovTotal) * 100) : 0;
 
+  // Extract target brand from URL for filtering
+  const targetBrand = (() => {
+    try {
+      const hostname = new URL(report.project.url).hostname.replace(/^www\./, "");
+      return hostname.split(".")[0].toLowerCase();
+    } catch {
+      return report.project.name.toLowerCase();
+    }
+  })();
+
   const competitors = new Map<string, number>();
   for (const sov of report.shareOfVoices) {
     const comps = (sov.competitors as string[]) ?? [];
     for (const c of comps) {
+      // Filter out the target brand
+      const cLower = c.toLowerCase().trim();
+      if (cLower.includes(targetBrand) || targetBrand.includes(cLower.replace(/\s+/g, ""))) continue;
       competitors.set(c, (competitors.get(c) ?? 0) + 1);
     }
   }
@@ -129,7 +142,7 @@ export default async function SharedReportPage({
         {/* Competitors — всегда показываем */}
         <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
           <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
-            Конкуренты в AI-поисковиках
+            Топ AI-рекомендаций в нише
           </h2>
           {topCompetitors.length > 0 ? (
             <CompetitorsTable competitors={topCompetitors} />

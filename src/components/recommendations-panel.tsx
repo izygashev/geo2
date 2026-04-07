@@ -11,7 +11,6 @@ import {
   Bot,
   Copy,
   Check,
-  AlertTriangle,
   Settings,
   TrendingUp,
   ClipboardList,
@@ -51,17 +50,17 @@ const TYPE_CONFIG: Record<
   }
 > = {
   "schema-org": {
-    label: "Schema.org",
+    label: "Разметка для роботов",
     color: "bg-[#F3EEFF] text-[#6B46C1] border-[#E2D5F8]",
-    actionLabel: "Сгенерировать код",
+    actionLabel: "Исправить в 1 клик",
     actionIcon: "code",
     impactWeight: 8,
     typeIcon: ShieldCheck,
   },
   "schema-faq": {
-    label: "FAQ Schema",
+    label: "Раздел «Вопрос-ответ»",
     color: "bg-[#F3EEFF] text-[#6B46C1] border-[#E2D5F8]",
-    actionLabel: "Сгенерировать JSON-LD",
+    actionLabel: "Исправить в 1 клик",
     actionIcon: "code",
     impactWeight: 8,
     typeIcon: HelpCircle,
@@ -69,21 +68,21 @@ const TYPE_CONFIG: Record<
   content: {
     label: "Контент",
     color: "bg-[#E1F3FE] text-[#1A6FBF] border-[#C8E1FE]",
-    actionLabel: "Создать ТЗ для статьи",
+    actionLabel: "Составить план статьи",
     actionIcon: "article",
     impactWeight: 7,
     typeIcon: FileText,
   },
   "rag-content": {
-    label: "RAG-контент",
+    label: "Адаптация текстов для ИИ",
     color: "bg-[#E1F3FE] text-[#1A6FBF] border-[#C8E1FE]",
-    actionLabel: "Сгенерировать Q&A блок",
+    actionLabel: "Исправить в 1 клик",
     actionIcon: "code",
     impactWeight: 9,
     typeIcon: MessageSquare,
   },
   technical: {
-    label: "Техническое",
+    label: "Настройки сайта",
     color: "bg-[#FBF3DB] text-[#B08D19] border-[#FBE5A8]",
     actionLabel: "Создать задачу",
     actionIcon: "task",
@@ -91,23 +90,23 @@ const TYPE_CONFIG: Record<
     typeIcon: Settings,
   },
   "semantic-tables": {
-    label: "Таблицы",
+    label: "Таблицы с данными",
     color: "bg-[#FBF3DB] text-[#B08D19] border-[#FBE5A8]",
-    actionLabel: "Сгенерировать разметку",
+    actionLabel: "Исправить в 1 клик",
     actionIcon: "code",
     impactWeight: 7,
     typeIcon: Table,
   },
   "llms-txt": {
-    label: "llms.txt",
+    label: "Визитка для ИИ",
     color: "bg-[#EDF3EC] text-[#2D6A4F] border-[#D1E7DD]",
-    actionLabel: "Сгенерировать файл",
+    actionLabel: "Создать визитку",
     actionIcon: "file",
     impactWeight: 9,
     typeIcon: Bot,
   },
   authority: {
-    label: "Авторитет",
+    label: "Репутация бренда",
     color: "bg-[#FDEBEC] text-[#B02A37] border-[#F5C2C7]",
     actionLabel: "Составить план",
     actionIcon: "article",
@@ -115,25 +114,25 @@ const TYPE_CONFIG: Record<
     typeIcon: TrendingUp,
   },
   entity: {
-    label: "Entity",
+    label: "Цифровая репутация",
     color: "bg-[#F0E8FF] text-[#5B21B6] border-[#DDD6FE]",
-    actionLabel: "Создать профиль",
+    actionLabel: "Создать профиль бренда",
     actionIcon: "article",
     impactWeight: 8,
     typeIcon: Database,
   },
   "platform-seeding": {
-    label: "Платформы",
+    label: "Присутствие на площадках",
     color: "bg-[#FFF3E6] text-[#B5651D] border-[#FFDDB5]",
-    actionLabel: "Составить план посева",
+    actionLabel: "Составить план",
     actionIcon: "article",
     impactWeight: 6,
     typeIcon: Globe,
   },
   sentiment: {
-    label: "Репутация",
+    label: "Тональность отзывов",
     color: "bg-[#FFF1F2] text-[#BE123C] border-[#FECDD3]",
-    actionLabel: "Создать план реагирования",
+    actionLabel: "Составить план",
     actionIcon: "article",
     impactWeight: 7,
     typeIcon: ThumbsUp,
@@ -141,23 +140,23 @@ const TYPE_CONFIG: Record<
   competitors: {
     label: "Конкуренты",
     color: "bg-[#FFF3E6] text-[#B5651D] border-[#FFDDB5]",
-    actionLabel: "Анализировать конкурента",
+    actionLabel: "Сравнить с конкурентом",
     actionIcon: "task",
     impactWeight: 4,
     typeIcon: Wrench,
   },
   "robots-txt": {
-    label: "Robots.txt",
+    label: "Доступ для ИИ",
     color: "bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]",
-    actionLabel: "Сгенерировать правила",
+    actionLabel: "Исправить в 1 клик",
     actionIcon: "code",
     impactWeight: 10,
     typeIcon: ShieldCheck,
   },
   "semantic-html": {
-    label: "Семантика",
+    label: "Структура страницы",
     color: "bg-[#FFF3E0] text-[#E65100] border-[#FFE0B2]",
-    actionLabel: "Создать шаблон",
+    actionLabel: "Исправить в 1 клик",
     actionIcon: "code",
     impactWeight: 7,
     typeIcon: Code2,
@@ -189,21 +188,21 @@ const CATEGORY_META: Record<
   }
 > = {
   critical: {
-    label: "Критические",
+    label: "Срочные",
     icon: Flame,
-    emptyText: "Критических проблем не найдено — отличная работа!",
+    emptyText: "Срочных проблем не найдено — отличная работа!",
     color: "text-[#B02A37]",
     badgeBg: "bg-[#FDEBEC] text-[#B02A37]",
   },
   technical: {
-    label: "Технические",
+    label: "Настройки сайта",
     icon: Settings,
-    emptyText: "Технических замечаний нет — инфраструктура в порядке.",
+    emptyText: "С настройками сайта всё в порядке.",
     color: "text-[#B08D19]",
     badgeBg: "bg-[#FBF3DB] text-[#B08D19]",
   },
   growth: {
-    label: "Стратегия роста",
+    label: "Рост и стратегия",
     icon: TrendingUp,
     emptyText: "Стратегических рекомендаций пока нет.",
     color: "text-[#2D6A4F]",
@@ -220,10 +219,10 @@ function categorize(type: string): Category {
 /** Estimated impact label from weight */
 function impactLabel(type: string): { text: string; color: string } {
   const w = TYPE_CONFIG[type]?.impactWeight ?? 5;
-  if (w >= 9) return { text: "Критичный", color: "text-[#B02A37] bg-[#FDEBEC]" };
-  if (w >= 7) return { text: "Высокий", color: "text-[#B08D19] bg-[#FBF3DB]" };
-  if (w >= 5) return { text: "Средний", color: "text-[#1A6FBF] bg-[#E1F3FE]" };
-  return { text: "Низкий", color: "text-[#787774] bg-[#F7F6F3]" };
+  if (w >= 9) return { text: "Очень важно", color: "text-[#B02A37] bg-[#FDEBEC]" };
+  if (w >= 7) return { text: "Важно", color: "text-[#B08D19] bg-[#FBF3DB]" };
+  if (w >= 5) return { text: "Полезно", color: "text-[#1A6FBF] bg-[#E1F3FE]" };
+  return { text: "На будущее", color: "text-[#787774] bg-[#F7F6F3]" };
 }
 
 /* ────────────────────────────────────────────────── */
@@ -249,13 +248,13 @@ interface RecommendationsPanelProps {
 
 /** The 7 canonical GEO factors we track for the progress bar */
 const GEO_FACTORS = [
-  { key: "entity",            label: "Entity-профили (Wikidata/Crunchbase)" },
-  { key: "rag-content",       label: "Q&A / RAG-структура контента" },
-  { key: "llms-txt",          label: "Файл llms.txt для AI-ботов" },
-  { key: "platform-seeding",  label: "Упоминания на Reddit/Quora" },
-  { key: "semantic-tables",   label: "Табличная разметка данных" },
+  { key: "entity",            label: "Цифровая репутация бренда" },
+  { key: "rag-content",       label: "Тексты, понятные нейросетям" },
+  { key: "llms-txt",          label: "Визитка для ИИ-ботов" },
+  { key: "platform-seeding",  label: "Присутствие на ключевых площадках" },
+  { key: "semantic-tables",   label: "Структурированные данные" },
   { key: "sentiment",         label: "Контроль тональности отзывов" },
-  { key: "schema-faq",        label: "FAQPage JSON-LD разметка" },
+  { key: "schema-faq",        label: "Раздел «Вопрос-ответ» с разметкой" },
 ] as const;
 
 /**
@@ -291,10 +290,10 @@ function AuditProgressCard({ recommendations }: { recommendations: Recommendatio
           </div>
           <div>
             <h3 className="text-sm font-semibold text-[#1a1a1a]">
-              Индекс GEO-готовности
+              Готовность к ИИ-поиску
             </h3>
             <p className="text-[11px] text-[#BBBBBB]">
-              Факторы AI-видимости вашего сайта
+              Сколько ключевых факторов вы уже закрыли
             </p>
           </div>
         </div>
@@ -311,7 +310,7 @@ function AuditProgressCard({ recommendations }: { recommendations: Recommendatio
           <span className="text-[10px] font-medium text-[#BBBBBB]">{pct}% выполнено</span>
           {completed < total && (
             <span className="text-[10px] font-medium text-[#2D6A4F]">
-              +{projectedSovGain}% прогноз SoV при полном внедрении
+              +{projectedSovGain}% прогноз узнаваемости при полном выполнении
             </span>
           )}
         </div>
@@ -348,18 +347,18 @@ function AuditProgressCard({ recommendations }: { recommendations: Recommendatio
       {completed < total && (
         <div className="mt-4 rounded-lg bg-[#F7F6F3] px-4 py-3">
           <p className="text-[11px] leading-relaxed text-[#787774]">
-            💡 <span className="font-medium text-[#555]">Совет:</span> Выполните критические
-            рекомендации, чтобы увеличить Share of Voice на прогнозируемые{" "}
-            <span className="font-bold text-[#2D6A4F]">+{projectedSovGain}%</span>.
-            AI-системы приоритизируют сайты с полным GEO-стеком.
+            💡 <span className="font-medium text-[#555]">Совет:</span> Выполните срочные
+            рекомендации, чтобы нейросети стали рекомендовать вас на{" "}
+            <span className="font-bold text-[#2D6A4F]">+{projectedSovGain}%</span> чаще.
+            Чем полнее подготовлен сайт, тем больше клиентов приходят из ИИ.
           </p>
         </div>
       )}
       {completed === total && (
         <div className="mt-4 rounded-lg bg-[#EDF3EC] px-4 py-3">
           <p className="text-[11px] leading-relaxed text-[#2D6A4F] font-medium">
-            🎉 Отличная работа! Все ключевые GEO-факторы внедрены.
-            Ваш сайт максимально подготовлен к AI-поисковикам.
+            🎉 Отличная работа! Все ключевые факторы закрыты.
+            Ваш сайт максимально подготовлен к продвижению через нейросети.
           </p>
         </div>
       )}
@@ -373,7 +372,7 @@ function AuditProgressCard({ recommendations }: { recommendations: Recommendatio
 
 function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: number }) {
   const [showCode, setShowCode] = useState(false);
-  const [actionClicked, setActionClicked] = useState(false);
+  const [showTz, setShowTz] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedTz, setCopiedTz] = useState(false);
 
@@ -390,12 +389,6 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
   const TypeIcon = config.typeIcon;
   const impact = impactLabel(rec.type);
 
-  const handleAction = () => {
-    setActionClicked(true);
-    if (hasCode) setShowCode(true);
-    setTimeout(() => setActionClicked(false), 2000);
-  };
-
   const handleCopyCode = async () => {
     if (!rec.generatedCode) return;
     await navigator.clipboard.writeText(rec.generatedCode);
@@ -403,22 +396,23 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const tzText = [
+    `# Задача: ${rec.title}`,
+    ``,
+    `## Тип: ${config.label}`,
+    `## Приоритет: ${impact.text}`,
+    ``,
+    `## Описание`,
+    rec.description,
+    ...(hasCode
+      ? [``, `## Пример кода`, "```", rec.generatedCode, "```"]
+      : []),
+    ``,
+    `---`,
+    `Сгенерировано GEO SaaS · ${new Date().toLocaleDateString("ru-RU")}`,
+  ].join("\n");
+
   const handleCopyTz = async () => {
-    const tzText = [
-      `# Задача: ${rec.title}`,
-      ``,
-      `## Тип: ${config.label}`,
-      `## Приоритет: ${impact.text}`,
-      ``,
-      `## Описание`,
-      rec.description,
-      ...(hasCode
-        ? [``, `## Пример кода`, "```", rec.generatedCode, "```"]
-        : []),
-      ``,
-      `---`,
-      `Сгенерировано GEO SaaS · ${new Date().toLocaleDateString("ru-RU")}`,
-    ].join("\n");
     await navigator.clipboard.writeText(tzText);
     setCopiedTz(true);
     setTimeout(() => setCopiedTz(false), 2000);
@@ -429,11 +423,11 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
       {/* Top accent bar */}
       <div
         className={`absolute inset-x-0 top-0 h-[2px] rounded-t-xl transition-opacity ${
-          impact.text === "Критичный"
+          impact.text === "Очень важно"
             ? "bg-[#B02A37]"
-            : impact.text === "Высокий"
+            : impact.text === "Важно"
               ? "bg-[#B08D19]"
-              : impact.text === "Средний"
+              : impact.text === "Полезно"
                 ? "bg-[#1A6FBF]"
                 : "bg-[#BBBBBB]"
         } opacity-60 group-hover:opacity-100`}
@@ -445,13 +439,13 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
           {/* Type icon + Number */}
           <div className="flex flex-col items-center gap-1.5 shrink-0">
             <div className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-[#EAEAEA] ${
-              impact.text === "Критичный" ? "bg-[#FDEBEC]" :
-              impact.text === "Высокий" ? "bg-[#FBF3DB]" :
+              impact.text === "Очень важно" ? "bg-[#FDEBEC]" :
+              impact.text === "Важно" ? "bg-[#FBF3DB]" :
               "bg-[#F7F6F3]"
             }`}>
               <TypeIcon className={`h-4 w-4 ${
-                impact.text === "Критичный" ? "text-[#B02A37]" :
-                impact.text === "Высокий" ? "text-[#B08D19]" :
+                impact.text === "Очень важно" ? "text-[#B02A37]" :
+                impact.text === "Важно" ? "text-[#B08D19]" :
                 "text-[#787774]"
               }`} />
             </div>
@@ -486,50 +480,73 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
 
             {/* ── Action bar ────────────────────────── */}
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#F0EFEB] pt-4">
-              {/* Primary AI action */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAction}
-                className={`h-8 gap-1.5 rounded-lg px-3.5 text-xs font-medium transition-all ${
-                  actionClicked
-                    ? "border-[#2D6A4F] bg-[#EDF3EC] text-[#2D6A4F]"
-                    : "border-[#1a1a1a] bg-[#1a1a1a] text-white hover:bg-[#333] shadow-sm"
-                }`}
-              >
-                <ActionIcon className="h-3.5 w-3.5" />
-                {actionClicked ? "✓ Готово" : config.actionLabel}
-              </Button>
+              {/* Show code toggle — primary action */}
+              {hasCode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCode((v) => !v)}
+                  className={`h-8 gap-1.5 rounded-lg px-3.5 text-xs font-medium transition-all ${
+                    showCode
+                      ? "border-[#2D6A4F] bg-[#EDF3EC] text-[#2D6A4F]"
+                      : "border-[#1a1a1a] bg-[#1a1a1a] text-white hover:bg-[#333] shadow-sm"
+                  }`}
+                >
+                  <ActionIcon className="h-3.5 w-3.5" />
+                  {showCode ? "Скрыть код" : config.actionLabel}
+                </Button>
+              )}
 
-              {/* Copy as TZ */}
+              {/* Show TZ toggle */}
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleCopyTz}
+                onClick={() => setShowTz((v) => !v)}
                 className={`h-8 gap-1.5 rounded-lg px-3 text-xs font-medium transition-all ${
-                  copiedTz
+                  showTz
                     ? "border-[#2D6A4F] bg-[#EDF3EC] text-[#2D6A4F]"
                     : "border-[#EAEAEA] text-[#787774] hover:border-[#1a1a1a] hover:text-[#1a1a1a]"
                 }`}
               >
                 <ClipboardList className="h-3.5 w-3.5" />
-                {copiedTz ? "✓ Скопировано" : "Скопировать ТЗ"}
+                {showTz ? "Скрыть ТЗ" : "Показать ТЗ"}
+                {showTz ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </Button>
-
-              {/* Show code toggle */}
-              {hasCode && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowCode((v) => !v)}
-                  className="h-8 gap-1.5 rounded-lg px-2.5 text-xs text-[#787774] hover:text-[#1a1a1a] hover:bg-[#F7F6F3]"
-                >
-                  <Code2 className="h-3.5 w-3.5" />
-                  {showCode ? "Скрыть" : "Код"}
-                  {showCode ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                </Button>
-              )}
             </div>
+
+            {/* ── TZ block ──────────────────────────── */}
+            {showTz && (
+              <div className="mt-3 relative overflow-hidden rounded-lg border border-[#E5E4E0] bg-[#FAFAF8]">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-[#EAEAEA] px-4 py-2.5">
+                  <span className="text-[11px] font-medium text-[#787774]">
+                    Техническое задание — передайте разработчику или копирайтеру
+                  </span>
+                  <button
+                    onClick={handleCopyTz}
+                    className="flex items-center gap-1.5 rounded-md border border-[#EAEAEA] bg-white px-2.5 py-1 text-[11px] font-medium text-[#555] transition-all hover:border-[#1a1a1a] hover:text-[#1a1a1a]"
+                  >
+                    {copiedTz ? (
+                      <>
+                        <Check className="h-3 w-3 text-[#2D6A4F]" />
+                        Скопировано
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3" />
+                        Скопировать ТЗ
+                      </>
+                    )}
+                  </button>
+                </div>
+                {/* TZ content */}
+                <div className="p-4">
+                  <pre className="text-[12px] leading-[1.8] text-[#555] font-mono whitespace-pre-wrap break-words">
+                    {tzText}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             {/* ── Code block ────────────────────────── */}
             {showCode && hasCode && (
@@ -537,7 +554,7 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-[#333] px-4 py-2">
                   <span className="text-[10px] font-medium uppercase tracking-widest text-[#666]">
-                    Пример реализации
+                    Готовый код — скопируйте и передайте программисту
                   </span>
                   <button
                     onClick={handleCopyCode}
@@ -629,21 +646,21 @@ export function RecommendationsPanel({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-[#1a1a1a]">
-              План GEO-оптимизации
+              Что нужно сделать
             </h2>
             <p className="text-[11px] text-[#BBBBBB]">
-              Персональная стратегия на основе аудита
+              Пошаговый план — от самого важного к полезному
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {buckets.critical.length > 0 && (
             <span className="rounded-full bg-[#FDEBEC] px-2.5 py-0.5 text-[11px] font-semibold text-[#B02A37]">
-              {buckets.critical.length} критич.
+              {buckets.critical.length} срочных
             </span>
           )}
           <span className="rounded-full bg-[#F7F6F3] px-2.5 py-0.5 text-[11px] font-medium text-[#787774]">
-            {total} рекомендаций
+            {total} задач
           </span>
         </div>
       </div>

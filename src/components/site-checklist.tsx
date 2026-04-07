@@ -31,14 +31,14 @@ export function SiteChecklist({
 }: SiteChecklistProps) {
   const items: ChecklistItem[] = [
     {
-      label: "/llms.txt",
+      label: "Визитка для нейросетей (llms.txt)",
       status: hasLlmsTxt ? "pass" : "fail",
       detail: hasLlmsTxt
-        ? "Файл обнаружен — AI-системы могут считывать информацию о бренде"
-        : "Файл не найден — создайте /llms.txt для AI-поисковиков",
+        ? "Файл найден — ИИ-ассистенты могут узнать, кто вы и чем занимаетесь"
+        : "ИИ не понимает, кто вы. Добавьте файл-визитку /llms.txt на свой сайт",
     },
     {
-      label: "Schema.org разметка",
+      label: "Скрытая разметка для роботов",
       status:
         schemaOrgTypes.length >= 3
           ? "pass"
@@ -47,32 +47,32 @@ export function SiteChecklist({
             : "fail",
       detail:
         schemaOrgTypes.length > 0
-          ? `Найдено: ${schemaOrgTypes.join(", ")}`
-          : "Структурированные данные JSON-LD не обнаружены",
+          ? `Нейросети нашли: ${schemaOrgTypes.join(", ")}`
+          : "Роботы не могут прочитать информацию о вашей компании — добавьте разметку",
     },
     {
-      label: "robots.txt (AI-боты)",
+      label: "Доступ для ИИ-ботов (robots.txt)",
       status: robotsTxtAiFriendly ? "pass" : "fail",
       detail: robotsTxtAiFriendly
-        ? "AI-боты (GPTBot, ClaudeBot, Google-Extended) не заблокированы"
-        : "Обнаружена блокировка AI-ботов — они не смогут индексировать ваш сайт",
+        ? "Нейросети могут свободно читать ваш сайт"
+        : "Вы заблокировали вход для ИИ-ботов — они не могут индексировать ваш сайт",
     },
     {
-      label: "Семантический HTML",
+      label: "Структура страницы",
       status: semanticHtmlValid ? "pass" : "warn",
       detail: semanticHtmlValid
-        ? "Найдены <main>/<article>, иерархия заголовков H1→H2 корректна"
-        : "Отсутствуют семантические теги (<main>, <article>) или нарушена иерархия заголовков",
+        ? "Страница правильно размечена — нейросети легко извлекают из неё ответы"
+        : "Нейросетям сложно разобрать структуру страницы — улучшите разметку заголовков",
     },
     {
-      label: "Мета-заголовок (Title)",
+      label: "Заголовок страницы (Title)",
       status: siteTitle && siteTitle.length > 10 ? "pass" : siteTitle ? "warn" : "fail",
       detail: siteTitle
         ? `«${siteTitle.slice(0, 60)}${siteTitle.length > 60 ? "…" : ""}»`
-        : "Title не задан",
+        : "Заголовок не задан — нейросети не знают, о чём ваша страница",
     },
     {
-      label: "Мета-описание (Description)",
+      label: "Описание страницы",
       status:
         siteDescription && siteDescription.length > 50
           ? "pass"
@@ -80,18 +80,18 @@ export function SiteChecklist({
             ? "warn"
             : "fail",
       detail: siteDescription
-        ? `${siteDescription.length} симв. — ${siteDescription.length >= 120 ? "оптимально" : "слишком коротко"}`
-        : "Description не задан",
+        ? `${siteDescription.length} символов — ${siteDescription.length >= 120 ? "отлично" : "маловато, лучше расширить"}`
+        : "Описание не задано — нейросети пропустят вашу страницу",
     },
     {
-      label: "Заголовок H1",
+      label: "Главный заголовок (H1)",
       status: siteH1 && siteH1.length > 3 ? "pass" : "fail",
       detail: siteH1
         ? `«${siteH1.slice(0, 60)}${siteH1.length > 60 ? "…" : ""}»`
-        : "H1 не найден на странице",
+        : "Главный заголовок не найден — нейросети не понимают тему страницы",
     },
     {
-      label: "Объём контента",
+      label: "Объём текста на странице",
       status:
         contentLength >= 1500
           ? "pass"
@@ -100,10 +100,10 @@ export function SiteChecklist({
             : "fail",
       detail: `${contentLength.toLocaleString("ru-RU")} символов — ${
         contentLength >= 1500
-          ? "достаточно для AI-индексации"
+          ? "достаточно для хорошего анализа"
           : contentLength >= 500
-            ? "минимально, рекомендуется расширить"
-            : "слишком мало контента для AI-анализа"
+            ? "маловато — нейросетям нужно больше информации"
+            : "слишком мало — ИИ просто не найдёт, что рекомендовать"
       }`,
     },
   ];
@@ -114,11 +114,16 @@ export function SiteChecklist({
     <div className="space-y-4">
       {/* Header с общим числом */}
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
-          Технический чеклист
-        </h3>
+        <div>
+          <h3 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
+            Готовность сайта для ИИ
+          </h3>
+          <p className="mt-0.5 text-[11px] text-[#BBBBBB]">
+            Что нейросети видят (и не видят) на вашем сайте
+          </p>
+        </div>
         <span className="text-xs text-[#787774]">
-          <span className="font-bold text-[#1a1a1a]">{passCount}</span>/{items.length} пройдено
+          <span className="font-bold text-[#1a1a1a]">{passCount}</span>/{items.length} ОК
         </span>
       </div>
 

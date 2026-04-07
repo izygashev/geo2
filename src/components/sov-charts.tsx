@@ -54,7 +54,7 @@ export function SovDonutChart({ mentioned, total }: SovDonutProps) {
         {/* Центральный текст */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-3xl font-bold tracking-tighter text-[#1a1a1a]">{pct}%</span>
-          <span className="text-xs text-[#787774]">Share of Voice</span>
+          <span className="text-xs text-[#787774]">Узнаваемость</span>
         </div>
       </div>
 
@@ -62,11 +62,11 @@ export function SovDonutChart({ mentioned, total }: SovDonutProps) {
       <div className="mt-3 flex gap-4 text-xs">
         <div className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#1a1a1a] inline-block" />
-          <span className="text-[#787774]">Упомянут ({mentioned})</span>
+          <span className="text-[#787774]">Вас советуют ({mentioned})</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#EAEAEA] inline-block" />
-          <span className="text-[#787774]">Нет ({notMentioned})</span>
+          <span className="text-[#787774]">Не советуют ({notMentioned})</span>
         </div>
       </div>
     </div>
@@ -98,7 +98,7 @@ function CustomTooltip({
       <div className="rounded-lg border border-[#EAEAEA] bg-white px-3 py-2 text-sm shadow-none">
         <p className="text-[#787774] max-w-[220px] whitespace-normal">{item.keyword}</p>
         <p className={`mt-1 text-xs font-medium ${item.isMentioned ? "text-[#1a1a1a]" : "text-[#BBBBBB]"}`}>
-          {item.isMentioned ? "✓ Упомянут" : "✗ Не упомянут"}
+          {item.isMentioned ? "✓ Вас рекомендуют" : "✗ Не рекомендуют"}
         </p>
       </div>
     );

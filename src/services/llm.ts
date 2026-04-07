@@ -8,8 +8,8 @@
 
 import OpenAI from "openai";
 import { z } from "zod";
-import type { SiteData } from "./scraper.js";
-import { extractJson, repairJson } from "../lib/json-utils.js";
+import type { SiteData } from "./scraper";
+import { extractJson, repairJson } from "../lib/json-utils";
 
 // ─── OpenRouter Client (lazy init — ждём загрузки .env) ──
 let _openrouter: OpenAI | null = null;
@@ -30,13 +30,13 @@ function getClient(): OpenAI {
 
 // ─── Модели ─────────────────────────────────────────────
 const CLAUDE_MODEL = "anthropic/claude-opus-4.6";
-const SONAR_MODEL = "perplexity/sonar-pro";
-const GPT_OSS_MODEL = "openai/gpt-oss-120b";
+const SONAR_MODEL = "perplexity/sonar-pro-search";
+const CLAUDE_SONNET_MODEL = "anthropic/claude-sonnet-4.6";
 
 // Multi-LLM модели для SoV-проверки
 export const MULTI_LLM_MODELS = [
   { id: SONAR_MODEL, name: "Perplexity" },
-  { id: GPT_OSS_MODEL, name: "GPT-OSS-120B" },
+  { id: CLAUDE_SONNET_MODEL, name: "Claude Sonnet" },
 ];
 
 // Бесплатные fallback-модели (если закончились кредиты)
@@ -213,6 +213,18 @@ export interface AnalysisResult {
 }
 
 // ─── Утилита: вызов LLM с fallback на бесплатные модели при 402 ───
+// Обёртка с таймаутом для любого промиса
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout ${ms}ms: ${label}`)), ms)
+    ),
+  ]);
+}
+
+const API_TIMEOUT = 180_000; // 180 секунд — Sonar Pro Search делает multi-step
+
 async function callWithFallback(
   messages: { role: "system" | "user"; content: string }[],
   maxTokens: number,
@@ -220,11 +232,15 @@ async function callWithFallback(
 ): Promise<string> {
   // Пробуем основную модель
   try {
-    const completion = await getClient().chat.completions.create({
-      model: primaryModel,
-      max_tokens: maxTokens,
-      messages,
-    });
+    const completion = await withTimeout(
+      getClient().chat.completions.create({
+        model: primaryModel,
+        max_tokens: maxTokens,
+        messages,
+      }),
+      API_TIMEOUT,
+      primaryModel
+    );
     return completion.choices[0]?.message?.content ?? "";
   } catch (error: unknown) {
     const status = (error as { status?: number }).status;
@@ -238,11 +254,15 @@ async function callWithFallback(
     const topModel = await fetchTopModel();
     if (topModel && topModel !== primaryModel) {
       console.log(`[LLM] 🏆 Пробую топ-модель: ${topModel}`);
-      const completion = await getClient().chat.completions.create({
-        model: topModel,
-        max_tokens: maxTokens,
-        messages,
-      });
+      const completion = await withTimeout(
+        getClient().chat.completions.create({
+          model: topModel,
+          max_tokens: maxTokens,
+          messages,
+        }),
+        API_TIMEOUT,
+        topModel
+      );
       const text = completion.choices[0]?.message?.content ?? "";
       if (text) {
         console.log(`[LLM] ✅ Топ-модель ${topModel} справилась!`);
@@ -258,20 +278,24 @@ async function callWithFallback(
   for (const freeModel of FREE_FALLBACK_MODELS) {
     try {
       console.log(`[LLM] 🔄 Пробую бесплатную модель: ${freeModel}`);
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-          "X-Title": "GEO SaaS",
-        },
-        body: JSON.stringify({
-          model: freeModel,
-          max_tokens: maxTokens,
-          messages,
+      const resp = await withTimeout(
+        fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+            "X-Title": "GEO SaaS",
+          },
+          body: JSON.stringify({
+            model: freeModel,
+            max_tokens: maxTokens,
+            messages,
+          }),
         }),
-      });
+        API_TIMEOUT,
+        freeModel
+      );
 
       if (resp.status === 429) {
         console.log(`[LLM] ⏳ Rate limit на ${freeModel}, жду 3с...`);
