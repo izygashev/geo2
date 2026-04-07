@@ -4,7 +4,7 @@
 # ════════════════════════════════════════════════════════════
 
 # ── Stage 1: Install dependencies ──────────────────────────
-FROM mcr.microsoft.com/playwright:v1.52.0-noble AS deps
+FROM mcr.microsoft.com/playwright:v1.58.2-noble AS deps
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts
 
 # ── Stage 2: Build the Next.js app ────────────────────────
-FROM mcr.microsoft.com/playwright:v1.52.0-noble AS builder
+FROM mcr.microsoft.com/playwright:v1.58.2-noble AS builder
 
 WORKDIR /app
 
@@ -26,7 +26,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # ── Stage 3: Production runner ─────────────────────────────
-FROM mcr.microsoft.com/playwright:v1.52.0-noble AS runner
+FROM mcr.microsoft.com/playwright:v1.58.2-noble AS runner
 
 WORKDIR /app
 
