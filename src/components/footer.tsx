@@ -80,7 +80,7 @@ export function Footer() {
         {/* Bottom row — реквизиты */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <p className="text-[11px] leading-relaxed text-[#BBBBBB]">
-            ИП Иванов И.И. · ИНН 1234567890 · ОГРНИП 312345678901234
+            НПД Изыгашев Георгий Олегович • ИНН 425201762001
           </p>
           <div className="flex items-center gap-4">
             <a

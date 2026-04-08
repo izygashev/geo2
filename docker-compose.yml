@@ -1,6 +1,11 @@
 # ════════════════════════════════════════════════════════════
 # Geo Studio — Docker Compose (Full Stack)
 # ════════════════════════════════════════════════════════════
+#
+# Production:  docker compose up -d
+# Migrate:     docker compose run --rm migrate
+# Logs:        docker compose logs -f app worker
+# ════════════════════════════════════════════════════════════
 
 services:
   # ── PostgreSQL ──────────────────────────────────────────
@@ -13,8 +18,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-geo_secret}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
+    # ports NOT exposed in production — only internal network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-geo}"]
       interval: 5s
@@ -25,8 +29,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # ports NOT exposed in production — only internal network
     volumes:
       - redisdata:/data
     healthcheck:

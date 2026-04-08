@@ -1,0 +1,16 @@
+# ════════════════════════════════════════════════════════════
+# Local Development Overrides
+# ════════════════════════════════════════════════════════════
+# This file is auto-loaded by `docker compose up` and exposes
+# database/redis ports for local development tools.
+# On production, run: docker compose -f docker-compose.yml up -d
+# ════════════════════════════════════════════════════════════
+
+services:
+  postgres:
+    ports:
+      - "5433:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

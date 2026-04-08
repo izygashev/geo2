@@ -1,12 +1,30 @@
+# Dependencies
 node_modules
+
+# Build output
 .next
+out
+
+# Git
 .git
 .gitignore
-*.md
-.env.local
-.env*.local
+
+# Environment files (CRITICAL — never bake secrets into images)
+.env
+.env.*
+!.env.example
+
+# Docker meta (avoid recursive copies)
 docker-compose.yml
+docker-compose.*.yml
 Dockerfile
 .dockerignore
+
+# IDE / Editor
 .vscode
 .idea
+*.swp
+
+# Docs & misc
+*.md
+LICENSE
