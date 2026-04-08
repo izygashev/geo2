@@ -15,9 +15,15 @@ import {
   Users,
   BarChart3,
   ArrowRightLeft,
+  CheckCircle2,
+  XCircle,
+  TrendingUp,
+  Megaphone,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { SovDonutChart, SovBarChart } from "@/components/sov-charts";
 import { ScoreRing, ScoreBreakdownBar } from "@/components/score-ring";
@@ -256,160 +262,135 @@ export default async function ReportPage({
 
       {/* COMPLETED state */}
       {report.status === "COMPLETED" && (
-        <div id="report-content" className="space-y-6">
+        <div id="report-content" className="space-y-8">
 
-          {/* Score History Trend (показываем если > 1 отчёта) */}
-          {historyData.length > 1 && (
-            <ScoreHistoryChart data={historyData} />
-          )}
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* HERO: Score Header — centered, prominent           */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <Card className="border-[#EAEAEA] bg-white shadow-none">
+            <CardContent className="px-6 pt-6 pb-8">
+              <div className="flex flex-col items-center text-center">
+                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774] mb-6">
+                  Общая оценка AI-видимости
+                </p>
+                <ScoreRing score={report.overallScore ?? 0} size={200} strokeWidth={12} />
 
-          {/* 30-day AI Visibility Trend — прогноз */}
-          <VisibilityTrendChart
-            currentScore={report.overallScore ?? 0}
-            createdAt={report.createdAt.toISOString()}
-          />
-
-          {/* ROW 1: Score Ring + Score Breakdown + Quick Stats */}
-          <div className="grid gap-4 lg:grid-cols-12">
-
-            {/* Score Ring */}
-            <div className="lg:col-span-4 rounded-xl border border-[#EAEAEA] bg-white p-6 flex flex-col items-center justify-center">
-              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
-                Видимость в ИИ
-              </p>
-              <p className="text-[11px] text-[#BBBBBB] mb-4 text-center max-w-[200px]">
-                Насколько хорошо нейросети знают и рекомендуют ваш бренд
-              </p>
-              <ScoreRing score={report.overallScore ?? 0} />
-            </div>
-
-            {/* Score Breakdown bars */}
-            <div className="lg:col-span-4 rounded-xl border border-[#EAEAEA] bg-white p-6">
-              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
-                Из чего складывается оценка
-              </p>
-              <p className="text-[11px] text-[#BBBBBB] mb-5">
-                Каждый фактор влияет на то, рекомендуют ли вас нейросети
-              </p>
-              <div className="space-y-4">
-                <ScoreBreakdownBar
-                  label="Узнаваемость в ИИ"
-                  value={report.scoreSov ?? sovPercent}
-                  icon={<Search className="h-3.5 w-3.5" />}
-                />
-                <ScoreBreakdownBar
-                  label="Разметка для роботов"
-                  value={report.scoreSchema ?? (schemaTypes.length > 0 ? 60 : 0)}
-                  icon={<FileText className="h-3.5 w-3.5" />}
-                />
-                <ScoreBreakdownBar
-                  label="Визитка для ИИ (llms.txt)"
-                  value={report.scoreLlmsTxt ?? (report.hasLlmsTxt ? 80 : 0)}
-                  icon={<Zap className="h-3.5 w-3.5" />}
-                />
-                <ScoreBreakdownBar
-                  label="Качество контента"
-                  value={report.scoreContent ?? 50}
-                  icon={<BarChart3 className="h-3.5 w-3.5" />}
-                />
-                <ScoreBreakdownBar
-                  label="Репутация бренда"
-                  value={report.scoreAuthority ?? 30}
-                  icon={<Shield className="h-3.5 w-3.5" />}
-                />
-              </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="lg:col-span-4 space-y-4">
-              {/* SoV mini */}
-              <div className="rounded-xl border border-[#EAEAEA] bg-white p-5">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-2">
-                  <Search className="h-3.5 w-3.5" />
-                  Узнаваемость в ИИ
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold tracking-tighter text-[#1a1a1a]">
-                    {sovPercent}%
+                {/* Quick metric pills */}
+                <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
+                    <Search className="h-3 w-3 text-[#787774]" />
+                    Узнаваемость: <span className="font-semibold text-[#1a1a1a]">{sovPercent}%</span>
+                    <span className="text-[#BBBBBB]">({sovMentioned}/{sovTotal})</span>
                   </span>
-                  <span className="text-sm text-[#BBBBBB]">
-                    ({sovMentioned} из {sovTotal})
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
+                    <Lightbulb className="h-3 w-3 text-[#787774]" />
+                    Рекомендаций: <span className="font-semibold text-[#1a1a1a]">{report.recommendations.length}</span>
                   </span>
-                </div>
-                <p className="mt-1 text-xs text-[#787774]">Как часто нейросети советуют вас, а не конкурентов</p>
-                {/* Sentiment badge */}
-                {report.sentiment && (
-                  <div className="mt-2">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
+                    <Users className="h-3 w-3 text-[#787774]" />
+                    Конкурентов: <span className="font-semibold text-[#1a1a1a]">{new Set(allCompetitors.map((c) => c.name.toLowerCase().trim())).size}</span>
+                  </span>
+                  {report.sentiment && (
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
                       report.sentiment === "positive"
-                        ? "bg-[#EDF3EC] text-[#2D6A4F]"
+                        ? "border border-[#D1E7DD] bg-[#EDF3EC] text-[#2D6A4F]"
                         : report.sentiment === "negative"
-                          ? "bg-[#FDEBEC] text-[#B02A37]"
-                          : "bg-[#F7F6F3] text-[#787774]"
+                          ? "border border-[#F5C2C7] bg-[#FDEBEC] text-[#B02A37]"
+                          : "border border-[#EAEAEA] bg-[#F7F6F3] text-[#787774]"
                     }`}>
                       {report.sentiment === "positive" ? "👍" : report.sentiment === "negative" ? "👎" : "➖"}
-                      {" "}Тональность: {report.sentiment === "positive" ? "Позитивная" : report.sentiment === "negative" ? "Негативная" : "Нейтральная"}
+                      {report.sentiment === "positive" ? "Позитивная тональность" : report.sentiment === "negative" ? "Негативная тональность" : "Нейтральная тональность"}
                     </span>
-                  </div>
-                )}
-                {/* Category badge */}
-                {report.categorySearched && (
-                  <div className="mt-1.5">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#F0EFEB] px-2 py-0.5 text-[10px] font-medium text-[#787774]">
-                      🏷️ Ниша: {report.categorySearched}
+                  )}
+                  {report.categorySearched && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
+                      🏷️ {report.categorySearched}
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Recommendations count */}
-              <div className="rounded-xl border border-[#EAEAEA] bg-white p-5">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-2">
-                  <Lightbulb className="h-3.5 w-3.5" />
-                  Что можно улучшить
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SCORE BREAKDOWN + HISTORY                          */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Score Breakdown */}
+            <Card className="border-[#EAEAEA] bg-white shadow-none">
+              <CardHeader className="px-6 pt-5 pb-0">
+                <CardTitle className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+                  Из чего складывается оценка
+                </CardTitle>
+                <CardDescription className="text-[11px] text-[#BBBBBB]">
+                  Каждый фактор влияет на то, рекомендуют ли вас нейросети
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="px-6 pt-4 pb-6">
+                <div className="space-y-4">
+                  <ScoreBreakdownBar
+                    label="Узнаваемость в ИИ"
+                    value={report.scoreSov ?? sovPercent}
+                    icon={<Search className="h-3.5 w-3.5" />}
+                  />
+                  <ScoreBreakdownBar
+                    label="Разметка для роботов"
+                    value={report.scoreSchema ?? (schemaTypes.length > 0 ? 60 : 0)}
+                    icon={<FileText className="h-3.5 w-3.5" />}
+                  />
+                  <ScoreBreakdownBar
+                    label="Визитка для ИИ (llms.txt)"
+                    value={report.scoreLlmsTxt ?? (report.hasLlmsTxt ? 80 : 0)}
+                    icon={<Zap className="h-3.5 w-3.5" />}
+                  />
+                  <ScoreBreakdownBar
+                    label="Качество контента"
+                    value={report.scoreContent ?? 50}
+                    icon={<BarChart3 className="h-3.5 w-3.5" />}
+                  />
+                  <ScoreBreakdownBar
+                    label="Репутация бренда"
+                    value={report.scoreAuthority ?? 30}
+                    icon={<Shield className="h-3.5 w-3.5" />}
+                  />
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold tracking-tighter text-[#1a1a1a]">
-                    {report.recommendations.length}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-[#787774]">конкретных действий для роста видимости</p>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Competitors count */}
-              <div className="rounded-xl border border-[#EAEAEA] bg-white p-5">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-2">
-                  <Users className="h-3.5 w-3.5" />
-                  Конкуренты в вашей нише
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold tracking-tighter text-[#1a1a1a]">
-                    {new Set(allCompetitors.map((c) => c.name.toLowerCase().trim())).size}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-[#787774]">брендов, которых нейросети рекомендуют в вашей нише</p>
-              </div>
+            {/* Score History OR Visibility Trend */}
+            <div className="space-y-4">
+              {historyData.length > 1 && (
+                <ScoreHistoryChart data={historyData} />
+              )}
+              <VisibilityTrendChart
+                currentScore={report.overallScore ?? 0}
+                createdAt={report.createdAt.toISOString()}
+              />
             </div>
           </div>
 
-          {/* ROW 2: SoV Charts + Checklist */}
-          <div className="grid gap-4 lg:grid-cols-12">
-            {/* SoV visualization */}
-            <div className="lg:col-span-7 rounded-xl border border-[#EAEAEA] bg-white p-6">
-              <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
-                Узнаваемость в ИИ — по каждому запросу
-              </h2>
-              <p className="text-[11px] text-[#BBBBBB] mb-6">
-                Мы спросили нейросети о вашей нише. Вот где вас рекомендуют, а где — нет.
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: Platform Mentions (SoV)                   */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <div>
+            <div className="mb-4 text-center">
+              <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+                Узнаваемость в ИИ
               </p>
+              <p className="mt-1 text-[11px] text-[#BBBBBB]">
+                Мы спросили нейросети о вашей нише — вот где вас рекомендуют
+              </p>
+            </div>
 
-              {sovTotal > 0 ? (
-                <>
+            {sovTotal > 0 ? (
+              <Card className="border-[#EAEAEA] bg-white shadow-none">
+                <CardContent className="px-6 pt-6 pb-6">
+                  {/* Charts row */}
                   <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-start">
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center shrink-0">
                       <SovDonutChart mentioned={sovMentioned} total={sovTotal} />
                     </div>
-                    <div className="hidden lg:block w-px bg-[#EAEAEA] self-stretch" />
+                    <Separator orientation="vertical" className="hidden lg:block self-stretch bg-[#F0EFEB]" />
                     <div className="flex-1 w-full min-w-0">
                       <SovBarChart
                         items={report.shareOfVoices.map((s) => ({
@@ -420,137 +401,228 @@ export default async function ReportPage({
                     </div>
                   </div>
 
-                  {/* Detailed SoV table */}
-                  <div className="mt-6 border-t border-[#F0EFEB] pt-5">
-                    <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-3">
-                      Что ответили нейросети
-                    </p>
-                    <div className="space-y-2">
-                      {report.shareOfVoices.map((sov, i) => (
-                        <div
-                          key={sov.id}
-                          className="group rounded-lg border border-[#F0EFEB] px-4 py-3 transition-colors hover:bg-[#FBFBFA]"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span
-                              className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                sov.isMentioned
-                                  ? "bg-[#EDF3EC] text-[#2D6A4F]"
-                                  : "bg-[#FDEBEC] text-[#B02A37]"
-                              }`}
-                            >
-                              {sov.isMentioned ? "\u2713" : "\u2717"}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-[#1a1a1a]">
-                                {sov.keyword}
+                  <Separator className="my-6 bg-[#F0EFEB]" />
+
+                  {/* Detailed keyword results as a clean grid */}
+                  <p className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-3">
+                    Что ответили нейросети
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {report.shareOfVoices.map((sov) => (
+                      <div
+                        key={sov.id}
+                        className={`rounded-xl border px-4 py-3 transition-colors ${
+                          sov.isMentioned
+                            ? "border-[#D1E7DD]/60 bg-[#FAFCFA] hover:bg-[#F5F9F5]"
+                            : "border-[#F5C2C7]/40 bg-[#FEFBFB] hover:bg-[#FDF7F7]"
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          {sov.isMentioned ? (
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#2D6A4F]" />
+                          ) : (
+                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#B02A37]" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-[#1a1a1a] leading-snug">
+                              {sov.keyword}
+                            </p>
+                            {sov.mentionContext && (
+                              <p className="mt-1 text-[11px] text-[#787774] leading-relaxed line-clamp-2">
+                                {sov.mentionContext}
                               </p>
-                              {sov.mentionContext && (
-                                <p className="mt-1 text-xs text-[#787774] leading-relaxed line-clamp-2">
-                                  {sov.mentionContext}
-                                </p>
-                              )}
-                              {(() => {
-                                const comps = (sov.competitors as { name: string }[])
-                                  ?.filter((c) => {
-                                    const n = c.name.toLowerCase().trim();
-                                    return !n.includes(targetBrand) && !targetBrand.includes(n.replace(/\s+/g, ""));
-                                  });
-                                if (!Array.isArray(comps) || comps.length === 0) return null;
-                                return (
-                                  <div className="mt-1.5 flex flex-wrap gap-1">
-                                    {comps.slice(0, 4).map((c, ci) => (
-                                      <span
-                                        key={ci}
-                                        className="inline-flex rounded border border-[#EAEAEA] bg-[#FBFBFA] px-1.5 py-0.5 text-[10px] text-[#787774]"
-                                      >
-                                        {c.name}
-                                      </span>
-                                    ))}
-                                    {comps.length > 4 && (
-                                      <span className="text-[10px] text-[#BBBBBB]">
-                                        +{comps.length - 4}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                            <span className="shrink-0 font-mono text-[10px] text-[#BBBBBB]">
-                              #{i + 1}
-                            </span>
+                            )}
+                            {(() => {
+                              const comps = (sov.competitors as { name: string }[])
+                                ?.filter((c) => {
+                                  const n = c.name.toLowerCase().trim();
+                                  return !n.includes(targetBrand) && !targetBrand.includes(n.replace(/\s+/g, ""));
+                                });
+                              if (!Array.isArray(comps) || comps.length === 0) return null;
+                              return (
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {comps.slice(0, 3).map((c, ci) => (
+                                    <span
+                                      key={ci}
+                                      className="inline-flex rounded border border-[#EAEAEA] bg-white px-1.5 py-0.5 text-[10px] text-[#787774]"
+                                    >
+                                      {c.name}
+                                    </span>
+                                  ))}
+                                  {comps.length > 3 && (
+                                    <span className="text-[10px] text-[#BBBBBB]">
+                                      +{comps.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-[#EAEAEA] bg-white shadow-none">
+                <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
                   <Search className="h-5 w-5 text-[#BBBBBB]" />
                   <p className="text-[#787774] text-sm">Мы пока не нашли данных об упоминаниях вашего бренда</p>
-                </div>
-              )}
-            </div>
-
-            {/* Technical checklist */}
-            <div className="lg:col-span-5 rounded-xl border border-[#EAEAEA] bg-white p-6">
-              <SiteChecklist
-                hasLlmsTxt={report.hasLlmsTxt}
-                schemaOrgTypes={schemaTypes}
-                contentLength={report.contentLength}
-                siteTitle={report.siteTitle}
-                siteDescription={report.siteDescription}
-                siteH1={report.siteH1}
-                robotsTxtAiFriendly={report.robotsTxtAiFriendly}
-                semanticHtmlValid={report.semanticHtmlValid}
-              />
-            </div>
-          </div>
-
-          {/* ROW 3: Competitors — всегда показываем */}
-          <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
-            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
-              <Users className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" />
-              Топ AI-рекомендаций в вашей нише
-            </h2>
-            <p className="text-sm text-[#787774] mb-5">
-              {allCompetitors.length > 0
-                ? "Бренды, которые нейросети чаще всего рекомендуют по запросам вашей ниши. Чем выше число — тем чаще."
-                : "Нейросети пока не определили прямых конкурентов в этой нише."}
-            </p>
-            {allCompetitors.length > 0 ? (
-              <CompetitorsTable competitors={allCompetitors} isPro={isPro} />
-            ) : (
-              <div className="flex flex-col items-center gap-3 py-8 text-center">
-                <Users className="h-5 w-5 text-[#BBBBBB]" />
-                <p className="text-sm text-[#787774]">
-                  После следующего анализа здесь появятся бренды-конкуренты, которые нейросети рекомендуют в вашей нише
-                </p>
-              </div>
+                </CardContent>
+              </Card>
             )}
           </div>
 
-          {/* ROW 3.5: RAG Chunk Visualizer */}
-          {report.scrapedBody && (
-            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
-              <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
-                <FileText className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" />
-                Как ИИ видит ваш контент
-              </h2>
-              <p className="text-sm text-[#787774] mb-5">
-                Нейросети разбивают текст вашего сайта на блоки (чанки) по ~800 токенов. Блоки без заголовка теряют контекст при RAG-парсинге.
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: Technical Audit                           */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <div>
+            <div className="mb-4 text-center">
+              <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+                Технический аудит
               </p>
-              <RagVisualizer text={report.scrapedBody} />
+              <p className="mt-1 text-[11px] text-[#BBBBBB]">
+                Что нейросети видят (и не видят) на вашем сайте
+              </p>
+            </div>
+            <Card className="border-[#EAEAEA] bg-white shadow-none">
+              <CardContent className="px-6 pt-6 pb-6">
+                <SiteChecklist
+                  hasLlmsTxt={report.hasLlmsTxt}
+                  schemaOrgTypes={schemaTypes}
+                  contentLength={report.contentLength}
+                  siteTitle={report.siteTitle}
+                  siteDescription={report.siteDescription}
+                  siteH1={report.siteH1}
+                  robotsTxtAiFriendly={report.robotsTxtAiFriendly}
+                  semanticHtmlValid={report.semanticHtmlValid}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: Competitors                               */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <div>
+            <div className="mb-4 text-center">
+              <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+                Конкуренты в вашей нише
+              </p>
+              <p className="mt-1 text-[11px] text-[#BBBBBB]">
+                {allCompetitors.length > 0
+                  ? "Бренды, которые нейросети рекомендуют чаще всего"
+                  : "После следующего анализа здесь появятся бренды-конкуренты"}
+              </p>
+            </div>
+            <Card className="border-[#EAEAEA] bg-white shadow-none">
+              <CardContent className="px-6 pt-6 pb-6">
+                {allCompetitors.length > 0 ? (
+                  <CompetitorsTable competitors={allCompetitors} isPro={isPro} />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 py-8 text-center">
+                    <Users className="h-5 w-5 text-[#BBBBBB]" />
+                    <p className="text-sm text-[#787774]">
+                      Нейросети пока не определили прямых конкурентов в этой нише
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: Digital PR — упоминания на площадках       */}
+          {/* ═══════════════════════════════════════════════════ */}
+          {report.digitalPr && Array.isArray(report.digitalPr) && (report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[]).length > 0 && (
+            <div>
+              <div className="mb-4 text-center">
+                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+                  Digital PR
+                </p>
+                <p className="mt-1 text-[11px] text-[#BBBBBB]">
+                  Где о вас говорят на популярных площадках
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {(report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[]).map((mention) => (
+                  <Card key={mention.platform} className={`border shadow-none transition-colors ${
+                    mention.mentioned
+                      ? "border-[#D1E7DD]/60 bg-[#FAFCFA]"
+                      : "border-[#EAEAEA] bg-white"
+                  }`}>
+                    <CardContent className="px-5 pt-5 pb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-[#1a1a1a]">
+                          {mention.platform}
+                        </span>
+                        {mention.mentioned ? (
+                          <CheckCircle2 className="h-4 w-4 text-[#2D6A4F]" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-[#BBBBBB]" />
+                        )}
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-[#787774] line-clamp-3">
+                        {mention.context}
+                      </p>
+                      {mention.url && mention.mentioned && (
+                        <a
+                          href={mention.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex text-[10px] font-medium text-[#555] hover:text-[#1a1a1a] transition-colors"
+                        >
+                          Открыть →
+                        </a>
+                      )}
+                      {mention.sentiment && (
+                        <div className="mt-2">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            mention.sentiment === "positive"
+                              ? "bg-[#EDF3EC] text-[#2D6A4F]"
+                              : mention.sentiment === "negative"
+                                ? "bg-[#FDEBEC] text-[#B02A37]"
+                                : "bg-[#F7F6F3] text-[#787774]"
+                          }`}>
+                            {mention.sentiment === "positive" ? "Позитивно" : mention.sentiment === "negative" ? "Негативно" : "Нейтрально"}
+                          </span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* ROW 4: Content Gaps — AI Content Spy */}
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: RAG Chunk Visualizer                      */}
+          {/* ═══════════════════════════════════════════════════ */}
+          {report.scrapedBody && (
+            <div>
+              <div className="mb-4 text-center">
+                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+                  Как ИИ видит ваш контент
+                </p>
+                <p className="mt-1 text-[11px] text-[#BBBBBB]">
+                  Нейросети разбивают текст на блоки по ~800 токенов — блоки без заголовка теряют контекст
+                </p>
+              </div>
+              <Card className="border-[#EAEAEA] bg-white shadow-none">
+                <CardContent className="px-6 pt-6 pb-6">
+                  <RagVisualizer text={report.scrapedBody} />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: Content Gaps                              */}
+          {/* ═══════════════════════════════════════════════════ */}
           {(() => {
-            // Типы рекомендаций, которые уже есть в Плане действий — не дублируем в Упущенных темах
             const existingRecTypes = new Set(report.recommendations.map((r) => r.type));
 
-            // Генерируем content gaps на основе реальных SoV-данных
             const missedKeywords = report.shareOfVoices.filter((s) => !s.isMentioned);
             const topCompetitorNames = Array.from(
               new Set(
@@ -562,14 +634,13 @@ export default async function ReportPage({
 
             const contentGaps: ContentGapItem[] = [];
 
-            // Gap из непокрытых ключевых запросов (только если нет content/rag-content рекомендаций)
             if (!existingRecTypes.has("content") && !existingRecTypes.has("rag-content")) {
               if (missedKeywords.length > 0 && topCompetitorNames.length > 0) {
                 const kw1 = missedKeywords[0];
                 contentGaps.push({
                   topic: `Контент по теме «${kw1.keyword}»`,
                   competitorSource: topCompetitorNames[0],
-                  aiInsight: `Когда клиенты спрашивают нейросеть «${kw1.keyword}», она рекомендует ${topCompetitorNames[0]}, а не вас. У конкурента есть подробный материал на эту тему.`,
+                  aiInsight: `Когда клиенты спрашивают нейросеть «${kw1.keyword}», она рекомендует ${topCompetitorNames[0]}, а не вас.`,
                   actionText: "Создать контент",
                   actionType: "content",
                 });
@@ -581,30 +652,28 @@ export default async function ReportPage({
                 contentGaps.push({
                   topic: `Экспертная статья: «${kw2.keyword}»`,
                   competitorSource: comp,
-                  aiInsight: `По запросу «${kw2.keyword}» ИИ ссылается на ${comp}. Напишите глубокий материал с уникальными данными — и нейросети начнут ссылаться на вас.`,
+                  aiInsight: `По запросу «${kw2.keyword}» ИИ ссылается на ${comp}. Напишите глубокий материал — и нейросети начнут ссылаться на вас.`,
                   actionText: "Создать контент",
                   actionType: "content",
                 });
               }
             }
 
-            // Gap по llms.txt — только если нет llms-txt рекомендации в плане
             if (!report.hasLlmsTxt && !existingRecTypes.has("llms-txt")) {
               contentGaps.push({
                 topic: "Визитка для нейросетей (llms.txt)",
                 competitorSource: topCompetitorNames[0] ?? "лидеры ниши",
-                aiInsight: "У лидеров ниши есть специальный файл-визитка, по которому нейросети узнают бренд. У вас такого файла нет — ИИ вас просто не видит. Сохраните этот код в файл llms.txt и загрузите его в корневую папку вашего сайта (чтобы он открывался по адресу ваш-сайт.com/llms.txt).",
+                aiInsight: "У лидеров ниши есть специальный файл-визитка. У вас такого файла нет — ИИ вас просто не видит.",
                 actionText: "Создать визитку",
                 actionType: "llms-txt",
               });
             }
 
-            // Gap по FAQ — только если нет schema-faq рекомендации в плане
             if (schemaTypes.length === 0 && report.hasLlmsTxt && !existingRecTypes.has("schema-faq")) {
               contentGaps.push({
                 topic: "FAQ / глоссарий терминов",
                 competitorSource: topCompetitorNames[0] ?? "лидеры ниши",
-                aiInsight: "У конкурентов есть структурированный раздел «Вопрос-ответ». Нейросети активно берут из него информацию для своих ответов.",
+                aiInsight: "У конкурентов есть FAQ-раздел. Нейросети активно берут из него информацию.",
                 actionText: "Создать FAQ",
                 actionType: "faq",
               });
@@ -620,7 +689,9 @@ export default async function ReportPage({
             );
           })()}
 
-          {/* ROW 5: Recommendations — Premium Panel */}
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: Recommendations — Action Plan             */}
+          {/* ═══════════════════════════════════════════════════ */}
           <RecommendationsPanel
             recommendations={report.recommendations.map((rec) => ({
               id: rec.id,
