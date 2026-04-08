@@ -34,14 +34,9 @@ const SONAR_MODEL = "perplexity/sonar-pro-search";
 const CLAUDE_SONNET_MODEL = "anthropic/claude-sonnet-4.6";
 
 // Multi-LLM модели для SoV-проверки
-// NB: yandex/yandexgpt и sber/gigachat — плейсхолдеры для CIS-рынка.
-// На данный момент требуют кастомной маршрутизации (прямой API Yandex Cloud / GigaChat
-// или прокси-провайдер вроде Bothub). OpenRouter их пока не поддерживает.
 export const MULTI_LLM_MODELS = [
   { id: SONAR_MODEL, name: "Perplexity" },
   { id: CLAUDE_SONNET_MODEL, name: "Claude Sonnet" },
-  { id: "yandex/yandexgpt", name: "Yandex Neuro" },
-  { id: "sber/gigachat", name: "GigaChat" },
 ];
 
 // Бесплатные fallback-модели (если закончились кредиты)
@@ -542,19 +537,11 @@ export async function checkShareOfVoiceMultiLlm(
 
   for (const model of MULTI_LLM_MODELS) {
     try {
-      // Для CIS-моделей (YandexGPT, GigaChat) добавляем локальный контекст
-      const isCisModel = model.id.includes("yandex") || model.id.includes("sber");
-      const cisPreamble = isCisModel
-        ? "You are a popular Russian AI assistant widely used in the CIS market. " +
-          "When recommending companies, prioritize services relevant to Russian-speaking users " +
-          "and the Russian/CIS market. Answer in Russian.\n\n"
-        : "";
-
       const rawText = await callWithFallback(
         [
           {
             role: "system",
-            content: `${cisPreamble}You are a helpful AI assistant. The user asks a question. You must:
+            content: `You are a helpful AI assistant. The user asks a question. You must:
 
 1. Identify the category/niche the question relates to.
 2. Answer the question naturally, recommending the top 5-10 best services/products/companies in this niche. Be specific — list REAL companies with real URLs.
