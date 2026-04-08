@@ -1,11 +1,135 @@
 /**
  * Playwright Scraper — парсит сайт и извлекает данные для GEO-анализа.
  *
+ * Использует @mozilla/readability (тот же алгоритм, что в Firefox Reader Mode)
+ * для CMS-агностичной экстракции чистого текста. Работает с любым CMS:
+ * Tilda, Wix, WordPress, Bitrix, React SPA, и т.д.
+ *
  * Извлекает: title, description, h1, основной текст (до 15000 символов),
  * наличие /llms.txt, Schema.org (JSON-LD) данные.
  */
 
 import { chromium, type Browser } from "playwright";
+import { Readability } from "@mozilla/readability";
+import { JSDOM } from "jsdom";
+
+// ─── Universal content extraction via Readability ───────
+/**
+ * Extracts clean, human-readable text from raw HTML using Mozilla Readability.
+ * This is the same algorithm used by Firefox Reader Mode and many LLM pipelines.
+ * CMS-agnostic: works with Tilda, Wix, WordPress, Bitrix, React SPAs, etc.
+ *
+ * Falls back to aggressive DOM cleanup if Readability fails to parse.
+ */
+function extractReadableText(html: string, pageUrl: string): string {
+  // 1. Try Readability (industry standard)
+  try {
+    const doc = new JSDOM(html, { url: pageUrl });
+    const reader = new Readability(doc.window.document, {
+      charThreshold: 50,       // lower threshold → more content extracted
+      nbTopCandidates: 10,     // consider more candidates for article body
+      keepClasses: false,      // strip all CSS classes
+    });
+    const article = reader.parse();
+
+    if (article && article.textContent && article.textContent.trim().length > 100) {
+      console.log(`[Scraper] 📖 Readability extracted ${article.textContent.trim().length} chars`);
+      // Readability returns clean text — just normalize whitespace
+      const text = article.textContent
+        .replace(/[ \t]{2,}/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      return text.slice(0, 15000);
+    }
+  } catch (err) {
+    console.log(`[Scraper] ⚠️ Readability failed: ${err instanceof Error ? err.message : err}`);
+  }
+
+  // 2. Fallback: aggressive DOM cleanup via JSDOM
+  console.log("[Scraper] 🔄 Readability insufficient, falling back to DOM cleanup...");
+  try {
+    const doc = new JSDOM(html, { url: pageUrl });
+    const document = doc.window.document;
+
+    // Remove ALL non-content elements
+    const junkSelectors = [
+      "script", "style", "noscript", "svg", "template", "iframe",
+      "canvas", "video", "audio", "object", "embed", "map",
+      "link", "meta",
+      // Structural noise
+      "nav", "header", "footer", "aside",
+      "[role='navigation']", "[role='banner']", "[role='contentinfo']",
+      "[role='complementary']", "[role='search']",
+      // Hidden elements
+      "[hidden]", "[aria-hidden='true']",
+      "[style*='display:none']", "[style*='display: none']",
+      "[style*='visibility:hidden']", "[style*='visibility: hidden']",
+      // Form internals
+      "select", "option", "input", "textarea", "button",
+      // Ad / tracking
+      "[id*='cookie']", "[class*='cookie']",
+      "[id*='banner']", "[class*='banner']",
+      "[class*='popup']", "[class*='modal']",
+      "[class*='overlay']",
+    ].join(", ");
+    document.querySelectorAll(junkSelectors).forEach((el) => el.remove());
+
+    // Extract text from content-bearing elements only
+    const contentSelectors = "p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, figcaption, dt, dd, summary, caption";
+
+    // Try scoped containers first
+    const containerSelectors = ["main", "article", '[role="main"]', "#content", ".content"];
+    let scope: Element = document.body;
+    for (const sel of containerSelectors) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent && el.textContent.trim().length > 200) {
+        scope = el;
+        break;
+      }
+    }
+
+    const contentEls = scope.querySelectorAll(contentSelectors);
+    const fragments: string[] = [];
+    const seen = new Set<string>();
+
+    for (const el of contentEls) {
+      const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (!txt || txt.length < 3) continue;
+      if (seen.has(txt)) continue;
+      // Code density check
+      const codeChars = (txt.match(/[{};=()]/g) || []).length;
+      if (txt.length > 5 && codeChars / txt.length > 0.10) continue;
+      seen.add(txt);
+      fragments.push(txt);
+    }
+
+    // If content elements yielded too little, try divs/spans
+    if (fragments.join(" ").length < 300) {
+      const fallbackEls = scope.querySelectorAll("div, span");
+      for (const el of fallbackEls) {
+        if (el.children.length > 3) continue;
+        const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+        if (!txt || txt.length < 5 || txt.length > 2000) continue;
+        if (seen.has(txt)) continue;
+        const codeChars = (txt.match(/[{};=()]/g) || []).length;
+        if (txt.length > 5 && codeChars / txt.length > 0.08) continue;
+        seen.add(txt);
+        fragments.push(txt);
+      }
+    }
+
+    const text = fragments.join("\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    console.log(`[Scraper] 📝 DOM fallback extracted ${text.length} chars`);
+    return text.slice(0, 15000);
+  } catch (err) {
+    console.log(`[Scraper] ⚠️ DOM fallback failed: ${err instanceof Error ? err.message : err}`);
+    return "";
+  }
+}
 
 // ─── Fast fetch fallback — для случаев, когда Playwright таймаутит ───
 async function fetchFallbackHtml(url: string): Promise<string | null> {
@@ -164,133 +288,10 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       .catch(() => "");
 
     // Основной текст страницы (до 15000 символов)
-    // CRITICAL: Extract text ONLY from content-bearing elements to prevent
-    // Tilda/Webflow/Next.js inline JS/CSS from leaking into RAG chunks.
-    const bodyText = await page.evaluate(() => {
-      // Clone body so we don't mutate the live DOM (needed for later checks)
-      const clone = document.body.cloneNode(true) as HTMLElement;
-
-      // 1. Strip ALL non-content elements aggressively
-      const junkSelectors = [
-        "script", "style", "noscript", "svg", "template", "iframe",
-        "canvas", "video", "audio", "object", "embed", "map",
-        "link[rel='stylesheet']", "link[rel='preload']",
-        // Tilda-specific: navigation, popups, technical blocks
-        "[data-tilda-root-zone-menuid]", ".t-menuburger", ".t-tildalabel",
-        ".t-popup", ".t-store__filter", ".t228", ".t390",
-        // Generic: navigation, footer, sidebars
-        "nav", "header", "footer", "aside",
-        "[role='navigation']", "[role='banner']", "[role='contentinfo']",
-        // Form internals, hidden elements
-        "select", "option", "input", "textarea", "button",
-        "[style*='display:none']", "[style*='display: none']",
-        "[hidden]", ".hidden", ".sr-only",
-      ].join(", ");
-      clone.querySelectorAll(junkSelectors).forEach((el) => el.remove());
-
-      // 2. Extract text ONLY from content-bearing elements
-      const contentSelectors = "p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, figcaption, dt, dd, summary, caption, label, legend";
-      
-      // Try content containers first
-      const containerSelectors = ["main", "article", '[role="main"]', "#content", ".content", "#rec", '[class*="t-container"]'];
-      let scope: HTMLElement = clone;
-      for (const sel of containerSelectors) {
-        const el = clone.querySelector(sel) as HTMLElement | null;
-        if (el && el.textContent && el.textContent.trim().length > 200) {
-          scope = el;
-          break;
-        }
-      }
-
-      // Collect text from content elements
-      const contentEls = scope.querySelectorAll(contentSelectors);
-      const fragments: string[] = [];
-      const seen = new Set<string>();
-
-      for (const el of contentEls) {
-        const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
-        // Skip empty, too short, duplicate, or code-like text
-        if (!txt || txt.length < 3) continue;
-        if (seen.has(txt)) continue;
-        // Code detection: skip if >10% of chars are code syntax {;=()=>
-        const codeChars = (txt.match(/[{};=()=>]/g) || []).length;
-        if (codeChars / txt.length > 0.10) continue;
-        // Skip CSS-like strings: "display:flex;margin:0;..."
-        if (/(?:[a-z-]+\s*:\s*[^;]{1,30};\s*){3,}/.test(txt)) continue;
-        // Skip JS function signatures: "function t_menuburger_init(..."
-        if (/function\s+\w+\s*\(/.test(txt)) continue;
-        seen.add(txt);
-        fragments.push(txt);
-      }
-
-      // If content elements yielded very little, fall back to divs/spans with text
-      if (fragments.join(" ").length < 300) {
-        const fallbackEls = scope.querySelectorAll("div, span, a");
-        for (const el of fallbackEls) {
-          // Only direct text nodes — skip if element has many child elements
-          if (el.children.length > 3) continue;
-          const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
-          if (!txt || txt.length < 5 || txt.length > 2000) continue;
-          if (seen.has(txt)) continue;
-          const codeChars = (txt.match(/[{};=()=>]/g) || []).length;
-          if (codeChars / txt.length > 0.08) continue;
-          if (/(?:[a-z-]+\s*:\s*[^;]{1,30};\s*){2,}/.test(txt)) continue;
-          if (/function\s+\w+\s*\(/.test(txt)) continue;
-          if (/^\s*(?:var|let|const|if|else|return|window|document)\b/.test(txt)) continue;
-          seen.add(txt);
-          fragments.push(txt);
-        }
-      }
-
-      let result = fragments.join("\n\n");
-
-      // 3. Final regex cleanup — catch anything that slipped through
-      result = result
-        // Tilda function names: t_menuburger_init, t_lazyload_init, etc.
-        .replace(/\bt_\w+_init\b[^.]*\./g, "")
-        .replace(/\bt\d{3,}[_.][\w.]+/g, "")
-        // CSS property leaks
-        .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, "")
-        // Stray curly brace blocks: { ... }
-        .replace(/\{[^}]{0,200}\}/g, " ")
-        // JS keywords followed by code
-        .replace(/\b(?:function|var|let|const|return|if|else|typeof|undefined|null|true|false|window\.|document\.)\b[^.!?\n]{0,100}/g, "")
-        // data-* attribute values that leaked
-        .replace(/data-[\w-]+=["'][^"']*["']/g, "")
-        // Orphaned CSS class names: .t-class-name
-        .replace(/\.t-[\w-]+/g, "")
-        // Collapse whitespace
-        .replace(/[ \t]{2,}/g, " ")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-
-      // 4. Final line-level filter — destroy any CSS/JS lines that survived
-      result = result
-        .split("\n")
-        .filter((line: string) => {
-          const t = line.trim();
-          if (!t) return true; // keep blank lines for paragraph breaks
-          // Drop lines containing CSS/JS block syntax
-          if (t.includes("{") || t.includes("}")) return false;
-          // Drop lines that look like CSS properties: "property: value;"
-          if (/^[a-z-]+\s*:\s*.+;$/i.test(t)) return false;
-          // Drop lines with CSS selectors: ".class", "#id", "tag:pseudo"
-          if (/^[.#][\w-]+|^\w+:(?:hover|focus|active|nth|first|last|before|after)/.test(t)) return false;
-          // Drop lines with @-rules: @keyframes, @media, @import
-          if (/^@(?:keyframes|media|import|font-face|charset|supports)\b/.test(t)) return false;
-          // Drop lines that are pure JS: assignments, function calls
-          if (/^(?:var|let|const|function|return|if|else|for|while|switch)\b/.test(t)) return false;
-          // Drop lines that are predominantly semicolons/symbols
-          const symbolChars = (t.match(/[{};:=()[\]<>]/g) || []).length;
-          if (t.length > 5 && symbolChars / t.length > 0.25) return false;
-          return true;
-        })
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-
-      return result.slice(0, 15000);
-    });
+    // Use @mozilla/readability — same algorithm as Firefox Reader Mode.
+    // CMS-agnostic: works with Tilda, Wix, WordPress, Bitrix, React SPAs, etc.
+    const renderedHtml = await page.content();
+    const bodyText = extractReadableText(renderedHtml, url);
 
     // ─── Schema.org (JSON-LD) ──────────────────────────
     const jsonLdBlocks = await page.evaluate(() => {
@@ -522,73 +523,9 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
       const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-      const bodyTextMatch = html
-        // Strip ALL non-content elements (same set as Playwright path)
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
-        .replace(/<svg[\s\S]*?<\/svg>/gi, "")
-        .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-        .replace(/<canvas[\s\S]*?<\/canvas>/gi, "")
-        .replace(/<video[\s\S]*?<\/video>/gi, "")
-        .replace(/<audio[\s\S]*?<\/audio>/gi, "")
-        .replace(/<object[\s\S]*?<\/object>/gi, "")
-        .replace(/<embed[\s\S]*?<\/embed>/gi, "")
-        .replace(/<template[\s\S]*?<\/template>/gi, "")
-        .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-        .replace(/<header[\s\S]*?<\/header>/gi, "")
-        .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-        .replace(/<link[^>]*>/gi, "")
-        // Strip all HTML tags, keeping only text
-        .replace(/<[^>]+>/g, " ")
-        // ── JS cleanup: IIFEs, Tilda functions, Next.js, Webpack ──
-        .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}/g, " ")
-        .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}\)/g, " ")
-        .replace(/function\s+\w+\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}/g, " ")
-        .replace(/var\s+__[A-Z_]+=[\s\S]{0,1000}?;/g, " ")
-        .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,1000}?\)/g, " ")
-        .replace(/self\.__next_f\.push[\s\S]{0,1000}?\)/g, " ")
-        // Tilda-specific patterns
-        .replace(/\bt_\w+_init\b[^.]*?\./g, " ")
-        .replace(/\bt\d{3,}[_.][\w.]+/g, " ")
-        .replace(/\.t-[\w-]+/g, " ")
-        .replace(/\$\(\s*["'][^"']+["']\s*\)[^;]{0,200};/g, " ")
-        // Stray JSON objects
-        .replace(/\{(?:"[\w]+":\s*(?:"[^"]*"|[\d.]+|true|false|null|(?:\{[^}]*\}))\s*,?\s*){3,}\}/g, " ")
-        // CSS property blocks: display:flex;justify-content:center;…
-        .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, " ")
-        // Stray curly brace blocks
-        .replace(/\{[^}]{0,300}\}/g, " ")
-        // JS keywords followed by code
-        .replace(/\b(?:var|let|const|return|typeof|undefined|window\.|document\.)\b[^.!?\n]{0,100}/g, " ")
-        // data-* attributes that leaked
-        .replace(/data-[\w-]+=["'][^"']*["']/g, " ")
-        // Base64 data URIs
-        .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, " ")
-        // Long hex/hash strings
-        .replace(/[0-9a-f]{20,}/gi, " ")
-        // Collapse whitespace
-        .replace(/\s+/g, " ")
-        .trim();
 
-      // Line-level filter — destroy any CSS/JS lines that survived
-      const bodyTextCleaned = bodyTextMatch
-        .split(/\.\s+/)
-        .filter((sentence: string) => {
-          const t = sentence.trim();
-          if (!t || t.length < 3) return false;
-          if (t.includes("{") || t.includes("}")) return false;
-          if (/^[a-z-]+\s*:\s*.+;$/i.test(t)) return false;
-          if (/^@(?:keyframes|media|import|font-face)\b/.test(t)) return false;
-          if (/^(?:var|let|const|function|return|if|else|for|while)\b/.test(t)) return false;
-          const symbolChars = (t.match(/[{};:=()[\]<>]/g) || []).length;
-          if (t.length > 5 && symbolChars / t.length > 0.25) return false;
-          return true;
-        })
-        .join(". ")
-        .replace(/\s{2,}/g, " ")
-        .trim()
-        .slice(0, 15000);
+      // Use Readability for CMS-agnostic content extraction
+      const bodyTextCleaned = extractReadableText(html, url);
 
       // Schema.org extraction
       const schemaMatches = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];

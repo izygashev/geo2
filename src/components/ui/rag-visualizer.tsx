@@ -32,63 +32,38 @@ function startsWithHeader(text: string): boolean {
 }
 
 /**
- * Strip residual JS/CSS artifacts that may have leaked into scrapedBody
- * from older reports stored before the scraper fix.
- * Must be aggressive — B2B users should never see raw code.
- * Covers: Next.js, Webpack, Vite, Nuxt, Tilda, Webflow, Wix.
+ * Lightweight safety net for residual artifacts in scrapedBody.
+ * The backend now uses @mozilla/readability for clean extraction,
+ * but old reports stored before this fix may still contain code.
+ * This is intentionally simple — the heavy lifting is server-side.
  */
 function sanitizeText(raw: string): string {
   let text = raw
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
-    .replace(/<svg[\s\S]*?<\/svg>/gi, "")
-    .replace(/<template[\s\S]*?<\/template>/gi, "")
+    // Strip any leftover HTML tags
     .replace(/<[^>]+>/g, " ")
-
-    // JS framework patterns
-    .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}/g, "")
-    .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}\)/g, "")
-    .replace(/function\s+\w+\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}/g, "")
-    .replace(/(?:var|let|const)\s+\w+\s*=\s*[\s\S]{0,500}?;/g, "")
-    .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,1000}?\)/g, "")
-    .replace(/self\.__next_f\.push[\s\S]{0,1000}?\)/g, "")
-    .replace(/static\/chunks\/[\w\-.]+\.js/g, "")
-
-    // Tilda-specific
-    .replace(/\bt_\w+_init\b[^.]*?\./g, "")
-    .replace(/\bt\d{3,}[_.][\w.]+/g, "")
-    .replace(/\.t-[\w-]+/g, "")
-    .replace(/\$\(\s*["'][^"']+["']\s*\)[^;]{0,200};/g, "")
-
-    // CSS leaks
+    // Remove stray curly brace blocks (CSS/JS)
+    .replace(/\{[^}]{0,500}\}/g, " ")
+    // Remove CSS property chains: "display:flex;margin:0;..."
     .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, "")
-    .replace(/\.[\w-]+\s*\{[^}]*\}/g, "")
-
-    // Data/binary leaks
-    .replace(/\{(?:"[\w]+":\s*(?:"[^"]*"|[\d.]+|true|false|null|(?:\{[^}]*\}))\s*,?\s*){3,}\}/g, "")
-    .replace(/\{[^}]{0,300}\}/g, " ")
+    // Remove base64 data URIs
     .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, "")
+    // Remove long hex hashes (asset hashes, tokens)
     .replace(/[0-9a-f]{20,}/gi, "")
-    .replace(/(?:\\u[0-9a-f]{4}|\\x[0-9a-f]{2}){3,}/gi, "")
-    .replace(/data-[\w-]+=["'][^"']*["']/g, "")
-    .replace(/\b(?:function|return|typeof|undefined|null|window\.|document\.)\b[^.!?\n]{0,100}/g, "")
-
+    // Collapse whitespace
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // Line-level filter — destroy any CSS/JS lines that survived
+  // Line-level filter — drop lines that are clearly code
   text = text
     .split("\n")
     .filter((line) => {
       const t = line.trim();
-      if (!t) return true;
+      if (!t) return true; // keep blank lines
       if (t.includes("{") || t.includes("}")) return false;
-      if (/^[a-z-]+\s*:\s*.+;$/i.test(t)) return false;
-      if (/^[.#][\w-]+|^\w+:(?:hover|focus|active|nth|first|last|before|after)/.test(t)) return false;
       if (/^@(?:keyframes|media|import|font-face|charset|supports)\b/.test(t)) return false;
       if (/^(?:var|let|const|function|return|if|else|for|while|switch)\b/.test(t)) return false;
+      // Drop lines with >25% symbols
       const symbolChars = (t.match(/[{};:=()[\]<>]/g) || []).length;
       if (t.length > 5 && symbolChars / t.length > 0.25) return false;
       return true;
@@ -97,16 +72,14 @@ function sanitizeText(raw: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // Paragraph-level filter
+  // Paragraph-level filter — drop code-like paragraphs
   const paragraphs = text.split("\n\n");
   const cleaned = paragraphs.filter((para) => {
     const trimmed = para.trim();
     if (!trimmed || trimmed.length < 3) return false;
     const codeChars = (trimmed.match(/[{};=()]/g) || []).length;
-    const ratio = codeChars / trimmed.length;
-    if (ratio > 0.12 && trimmed.length < 600) return false;
+    if (trimmed.length > 5 && codeChars / trimmed.length > 0.12 && trimmed.length < 600) return false;
     if (/\w+\.\w+\([^)]*\)\.\w+\(/.test(trimmed)) return false;
-    if (/^\s*(?:if|else|for|while|switch|case|try|catch)\s*[\({]/.test(trimmed)) return false;
     return true;
   });
   text = cleaned.join("\n\n");
