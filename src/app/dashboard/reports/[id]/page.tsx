@@ -535,18 +535,28 @@ export default async function ReportPage({
           {/* ═══════════════════════════════════════════════════ */}
           {/* SECTION: Digital PR — упоминания на площадках       */}
           {/* ═══════════════════════════════════════════════════ */}
-          {report.digitalPr && Array.isArray(report.digitalPr) && (report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[]).length > 0 && (
+          {report.digitalPr && Array.isArray(report.digitalPr) && (report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[]).length > 0 && (() => {
+            const PLATFORM_LABELS: Record<string, string> = {
+              "vc.ru": "VC.ru",
+              "habr.com": "Хабр",
+              "pikabu.ru": "Пикабу",
+              "otzovik.com": "Отзовик",
+              "yandex.ru/maps": "Яндекс Карты",
+              "2gis.ru": "2ГИС",
+            };
+            const mentions = report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[];
+            return (
             <div>
               <div className="mb-4 text-center">
                 <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
                   Digital PR
                 </p>
                 <p className="mt-1 text-[11px] text-[#BBBBBB]">
-                  Где о вас говорят на популярных площадках
+                  Где о вас говорят на популярных площадках Рунета
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {(report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[]).map((mention) => (
+                {mentions.map((mention) => (
                   <Card key={mention.platform} className={`border shadow-none transition-colors ${
                     mention.mentioned
                       ? "border-[#D1E7DD]/60 bg-[#FAFCFA]"
@@ -555,7 +565,7 @@ export default async function ReportPage({
                     <CardContent className="px-5 pt-5 pb-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-semibold text-[#1a1a1a]">
-                          {mention.platform}
+                          {PLATFORM_LABELS[mention.platform] ?? mention.platform}
                         </span>
                         {mention.mentioned ? (
                           <CheckCircle2 className="h-4 w-4 text-[#2D6A4F]" />
@@ -594,7 +604,8 @@ export default async function ReportPage({
                 ))}
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ═══════════════════════════════════════════════════ */}
           {/* SECTION: RAG Chunk Visualizer                      */}

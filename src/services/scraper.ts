@@ -164,10 +164,19 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       .catch(() => "");
 
     // Основной текст страницы (до 15000 символов)
+    // CRITICAL: Remove script/style/noscript/svg BEFORE extracting textContent
+    // to prevent minified JS/CSS from leaking into RAG chunks.
     const bodyText = await page.evaluate(() => {
-      const selectors = ["main", "article", '[role="main"]', "#content", ".content", "body"];
+      // Clone body so we don't mutate the live DOM (needed for later checks)
+      const clone = document.body.cloneNode(true) as HTMLElement;
+
+      // Strip all non-content elements
+      const junkSelectors = "script, style, noscript, svg, link[rel='stylesheet'], iframe, canvas, video, audio, object, embed";
+      clone.querySelectorAll(junkSelectors).forEach((el) => el.remove());
+
+      const selectors = ["main", "article", '[role="main"]', "#content", ".content"];
       for (const sel of selectors) {
-        const el = document.querySelector(sel);
+        const el = clone.querySelector(sel);
         if (el && el.textContent && el.textContent.trim().length > 100) {
           return el.textContent
             .replace(/\s+/g, " ")
@@ -175,7 +184,7 @@ export async function scrapeSite(url: string): Promise<SiteData> {
             .slice(0, 15000);
         }
       }
-      return (document.body?.textContent ?? "")
+      return (clone.textContent ?? "")
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 15000);
@@ -413,6 +422,9 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
       const bodyTextMatch = html.replace(/<script[\s\S]*?<\/script>/gi, "")
         .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+        .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+        .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
         .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim()

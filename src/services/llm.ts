@@ -929,12 +929,12 @@ The overallScore should be a weighted average of scoreBreakdown components.`;
 // 4. Digital PR — проверка упоминаний бренда на площадках
 // ═══════════════════════════════════════════════════════════
 const DIGITAL_PR_PLATFORMS = [
-  "reddit.com",
   "vc.ru",
   "habr.com",
-  "quora.com",
-  "producthunt.com",
-  "trustpilot.com",
+  "pikabu.ru",
+  "otzovik.com",
+  "yandex.ru/maps",
+  "2gis.ru",
 ];
 
 export async function checkDigitalPr(
@@ -951,39 +951,40 @@ export async function checkDigitalPr(
       [
         {
           role: "system",
-          content: `You are an expert digital PR analyst with deep web search capabilities.
-Your task is to find REAL, organic mentions of a brand on popular community and review platforms.
+          content: `You are an expert digital PR analyst specialising in the Russian-speaking (CIS) internet.
+Your task is to find REAL, organic mentions of a brand on popular Russian community, review, and map platforms.
 
 CRITICAL RULES:
-- Search specifically for actual discussions, reviews, threads, or posts mentioning the brand.
+- Search specifically for actual discussions, reviews, company profiles, threads, or posts mentioning the brand.
 - Only report REAL mentions you can verify. Do NOT fabricate URLs or discussions.
-- If you find no mentions on a platform, set "mentioned": false and explain briefly.
+- If you find no mentions on a platform, set "mentioned": false and explain briefly in Russian.
 - For each real mention found, include the actual URL if possible.
 - Evaluate the sentiment of each mention (positive/neutral/negative).
+- All "context" values MUST be in Russian.
 
 Return ONLY valid JSON, no markdown or extra text.`,
         },
         {
           role: "user",
-          content: `Search for recent organic discussions, reviews, or mentions of the brand "${brandName}" (website: ${siteUrl}, domain: ${domain}) on these platforms: ${platformsList}.
+          content: `Найди недавние органические обсуждения, отзывы, профили или упоминания бренда "${brandName}" (сайт: ${siteUrl}, домен: ${domain}) на этих площадках: ${platformsList}.
 
-For each platform, report whether the brand is mentioned and provide context.
+Для каждой площадки укажи, упоминается ли бренд, и дай краткий контекст на русском языке.
 
 Return JSON in this exact format:
 {
   "mentions": [
     {
-      "platform": "reddit.com",
+      "platform": "vc.ru",
       "mentioned": true,
-      "url": "https://reddit.com/r/...",
-      "context": "Brief description of the discussion or mention",
+      "url": "https://vc.ru/...",
+      "context": "Краткое описание обсуждения или упоминания",
       "sentiment": "positive"
     },
     {
-      "platform": "quora.com",
+      "platform": "otzovik.com",
       "mentioned": false,
       "url": "",
-      "context": "No mentions found on Quora",
+      "context": "Упоминания на Отзовике не найдены",
       "sentiment": "neutral"
     }
   ]
@@ -1017,7 +1018,7 @@ Return exactly ${DIGITAL_PR_PLATFORMS.length} entries, one per platform: ${platf
     return DIGITAL_PR_PLATFORMS.map((platform) => ({
       platform,
       mentioned: false,
-      context: "Не удалось проверить — ошибка анализа",
+      context: "Не удалось проверить площадку — повторите анализ позже",
     }));
   }
 }

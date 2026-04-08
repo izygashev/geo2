@@ -22,6 +22,28 @@ function startsWithHeader(text: string): boolean {
   return HEADER_RE.test(firstLine.trim());
 }
 
+/**
+ * Strip residual JS/CSS artifacts that may have leaked into scrapedBody
+ * from older reports stored before the scraper fix.
+ */
+function sanitizeText(raw: string): string {
+  return raw
+    // Remove inline <script>…</script> and <style>…</style> leftovers
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+    // Strip stray HTML tags
+    .replace(/<[^>]+>/g, " ")
+    // Remove common minified JS patterns (e.g. "!function(e){…}", "var __NEXT_DATA__=…")
+    .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,500}\}/g, "")
+    .replace(/var\s+__[A-Z_]+=[\s\S]{0,500}?;/g, "")
+    .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,500}?\)/g, "")
+    // Collapse excessive whitespace
+    .replace(/\s{3,}/g, "\n\n")
+    .trim();
+}
+
 interface Chunk {
   id: number;
   text: string;
@@ -77,8 +99,8 @@ function chunkText(text: string): Chunk[] {
 
 function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
   const [expanded, setExpanded] = useState(false);
-  const preview = chunk.text.slice(0, 220);
-  const isLong = chunk.text.length > 220;
+  const preview = chunk.text.slice(0, 280);
+  const isLong = chunk.text.length > 280;
 
   return (
     <div
@@ -114,17 +136,23 @@ function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
         )}
       </div>
 
-      {/* Text preview */}
-      <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-[#444]">
-        {expanded ? chunk.text : preview}
-        {!expanded && isLong && <span className="text-[#BBBBBB]">…</span>}
-      </pre>
+      {/* Text preview — constrained height, scrollable when expanded */}
+      <div
+        className={`rounded-md bg-[#FAFAF9] p-3 text-[12px] leading-relaxed text-[#555] font-mono ${
+          expanded ? "max-h-64 overflow-y-auto" : "line-clamp-6"
+        }`}
+      >
+        <p className="whitespace-pre-wrap break-words m-0">
+          {expanded ? chunk.text : preview}
+          {!expanded && isLong && <span className="text-[#BBBBBB]">…</span>}
+        </p>
+      </div>
 
       {/* Expand/collapse */}
       {isLong && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="mt-2 inline-flex items-center gap-1 self-start text-[12px] font-medium text-[#787774] transition-colors hover:text-[#1a1a1a]"
+          className="mt-2.5 inline-flex items-center gap-1 self-start text-[12px] font-medium text-[#787774] transition-colors hover:text-[#1a1a1a]"
         >
           {expanded ? (
             <>
@@ -148,8 +176,9 @@ interface RagVisualizerProps {
 }
 
 export function RagVisualizer({ text }: RagVisualizerProps) {
-  const chunks = chunkText(text);
-  const totalTokens = estimateTokens(text);
+  const clean = sanitizeText(text);
+  const chunks = chunkText(clean);
+  const totalTokens = estimateTokens(clean);
   const warningCount = chunks.filter((c) => !c.hasHeader).length;
 
   if (chunks.length === 0) {
