@@ -36,6 +36,7 @@ const CLAUDE_SONNET_MODEL = "anthropic/claude-sonnet-4.6";
 // Multi-LLM модели для SoV-проверки
 export const MULTI_LLM_MODELS = [
   { id: SONAR_MODEL, name: "Perplexity" },
+  { id: CLAUDE_MODEL, name: "Claude Opus" },
   { id: CLAUDE_SONNET_MODEL, name: "Claude Sonnet" },
 ];
 
