@@ -112,6 +112,7 @@ model Report {
   schemaOrgTypes  Json     @default("[]")
   contentLength   Int      @default(0)
   scrapedBody     String?  @db.Text      // Полный bodyText для RAG-визуализации
+  digitalPr       Json?                 // Результаты Digital PR (массив DigitalPrMention[])
 
   // ─── Новые технические проверки (scraper) ───────────
   robotsTxtAiFriendly Boolean @default(false)  // robots.txt не блокирует GPTBot/ClaudeBot/Google-Extended

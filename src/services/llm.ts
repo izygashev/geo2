@@ -182,7 +182,27 @@ const RecommendationsSchema = z.object({
   ),
 });
 
+const DigitalPrSchema = z.object({
+  mentions: z.array(
+    z.object({
+      platform: z.string(),
+      mentioned: z.boolean(),
+      url: z.string().optional(),
+      context: z.string(),
+      sentiment: z.enum(["positive", "neutral", "negative"]).optional(),
+    })
+  ),
+});
+
 // ─── Типы ────────────────────────────────────────────────
+export interface DigitalPrMention {
+  platform: string;
+  mentioned: boolean;
+  url?: string;
+  context: string;
+  sentiment?: "positive" | "neutral" | "negative";
+}
+
 export interface KeywordItem {
   query: string;
   intent: string;
@@ -914,5 +934,102 @@ The overallScore should be a weighted average of scoreBreakdown components.`;
       scoreBreakdown: fallbackBreakdown,
       recommendations: fallbackRecs,
     };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 4. Digital PR — проверка упоминаний бренда на площадках
+// ═══════════════════════════════════════════════════════════
+const DIGITAL_PR_PLATFORMS = [
+  "reddit.com",
+  "vc.ru",
+  "habr.com",
+  "quora.com",
+  "producthunt.com",
+  "trustpilot.com",
+];
+
+export async function checkDigitalPr(
+  siteUrl: string,
+  brandName: string
+): Promise<DigitalPrMention[]> {
+  const domain = new URL(siteUrl).hostname.replace("www.", "");
+  const platformsList = DIGITAL_PR_PLATFORMS.join(", ");
+
+  console.log(`[LLM] 📰 Digital PR проверка для "${brandName}" (${domain})`);
+
+  try {
+    const rawText = await callWithFallback(
+      [
+        {
+          role: "system",
+          content: `You are an expert digital PR analyst with deep web search capabilities.
+Your task is to find REAL, organic mentions of a brand on popular community and review platforms.
+
+CRITICAL RULES:
+- Search specifically for actual discussions, reviews, threads, or posts mentioning the brand.
+- Only report REAL mentions you can verify. Do NOT fabricate URLs or discussions.
+- If you find no mentions on a platform, set "mentioned": false and explain briefly.
+- For each real mention found, include the actual URL if possible.
+- Evaluate the sentiment of each mention (positive/neutral/negative).
+
+Return ONLY valid JSON, no markdown or extra text.`,
+        },
+        {
+          role: "user",
+          content: `Search for recent organic discussions, reviews, or mentions of the brand "${brandName}" (website: ${siteUrl}, domain: ${domain}) on these platforms: ${platformsList}.
+
+For each platform, report whether the brand is mentioned and provide context.
+
+Return JSON in this exact format:
+{
+  "mentions": [
+    {
+      "platform": "reddit.com",
+      "mentioned": true,
+      "url": "https://reddit.com/r/...",
+      "context": "Brief description of the discussion or mention",
+      "sentiment": "positive"
+    },
+    {
+      "platform": "quora.com",
+      "mentioned": false,
+      "url": "",
+      "context": "No mentions found on Quora",
+      "sentiment": "neutral"
+    }
+  ]
+}
+
+Return exactly ${DIGITAL_PR_PLATFORMS.length} entries, one per platform: ${platformsList}.`,
+        },
+      ],
+      2000,
+      SONAR_MODEL
+    );
+
+    const jsonStr = extractJson(rawText);
+    let jsonFixed = jsonStr;
+    try {
+      JSON.parse(jsonFixed);
+    } catch {
+      jsonFixed = repairJson(jsonFixed);
+    }
+    const parsed = DigitalPrSchema.parse(JSON.parse(jsonFixed));
+
+    const mentionedCount = parsed.mentions.filter((m) => m.mentioned).length;
+    console.log(
+      `[LLM] ✅ Digital PR: ${mentionedCount}/${parsed.mentions.length} площадок с упоминаниями`
+    );
+
+    return parsed.mentions;
+  } catch (error) {
+    console.error(`[LLM] ❌ Ошибка Digital PR для "${brandName}":`, error);
+    // Fallback: все площадки без упоминаний
+    return DIGITAL_PR_PLATFORMS.map((platform) => ({
+      platform,
+      mentioned: false,
+      context: "Не удалось проверить — ошибка анализа",
+    }));
   }
 }

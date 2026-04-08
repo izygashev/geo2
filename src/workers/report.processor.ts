@@ -14,6 +14,7 @@ import {
   checkShareOfVoice,
   checkShareOfVoiceMultiLlm,
   generateRecommendations,
+  checkDigitalPr,
   type SovCheckResult,
 } from "@/services/llm";
 import { sendReportReadyEmail } from "@/lib/email";
@@ -66,7 +67,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     // ШАГ 1: Парсинг сайта через Playwright
     // ═══════════════════════════════════════════════════════
     await progress(job, { percent: 5, step: "Подключаемся к сайту..." });
-    console.log(`[Worker] ── Шаг 1/4: Парсинг сайта ──`);
+    console.log(`[Worker] ── Шаг 1/5: Парсинг сайта ──`);
 
     const siteData = await scrapeSite(projectUrl);
 
@@ -76,7 +77,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     // ═══════════════════════════════════════════════════════
     // ШАГ 2: Генерация ключевых запросов (Claude)
     // ═══════════════════════════════════════════════════════
-    console.log(`[Worker] ── Шаг 2/4: Генерация ключевых запросов ──`);
+    console.log(`[Worker] ── Шаг 2/5: Генерация ключевых запросов ──`);
     await progress(job, { percent: 25, step: "Генерируем ключевые запросы..." });
 
     const keywords = await generateKeywords(siteData);
@@ -89,7 +90,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     // ═══════════════════════════════════════════════════════
     // ШАГ 3: Проверка Share of Voice (Perplexity Sonar)
     // ═══════════════════════════════════════════════════════
-    console.log(`[Worker] ── Шаг 3/4: Проверка Share of Voice${multiLlm ? " (Multi-LLM)" : ""} ──`);
+    console.log(`[Worker] ── Шаг 3/5: Проверка Share of Voice${multiLlm ? " (Multi-LLM)" : ""} ──`);
 
     // Проверяем, не отменён ли отчёт перед дорогими API-вызовами
     const checkBeforeSov = await db.report.findUnique({ where: { id: reportId }, select: { status: true } });
@@ -127,14 +128,29 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
       `[Worker] ✅ SoV: упомянут в ${mentionedCount}/${sovResults.length} запросах`
     );
     await progress(job, {
-      percent: 75,
-      step: `AI-видимость: ${mentionedCount} из ${sovResults.length}. Генерируем рекомендации...`,
+      percent: 70,
+      step: `AI-видимость: ${mentionedCount} из ${sovResults.length}. Проверяем Digital PR...`,
     });
 
     // ═══════════════════════════════════════════════════════
-    // ШАГ 4: Генерация рекомендаций и Score (Claude)
+    // ШАГ 4: Digital PR — упоминания на площадках (Sonar)
     // ═══════════════════════════════════════════════════════
-    console.log(`[Worker] ── Шаг 4/4: Генерация рекомендаций ──`);
+    console.log(`[Worker] ── Шаг 4/5: Digital PR ──`);
+
+    const brandName = siteData.title || new URL(projectUrl).hostname.replace("www.", "");
+    const digitalPrResults = await checkDigitalPr(projectUrl, brandName);
+
+    const prMentioned = digitalPrResults.filter((m) => m.mentioned).length;
+    console.log(`[Worker] ✅ Digital PR: ${prMentioned}/${digitalPrResults.length} площадок`);
+    await progress(job, {
+      percent: 80,
+      step: `Digital PR: ${prMentioned} площадок. Генерируем рекомендации...`,
+    });
+
+    // ═══════════════════════════════════════════════════════
+    // ШАГ 5: Генерация рекомендаций и Score (Claude)
+    // ═══════════════════════════════════════════════════════
+    console.log(`[Worker] ── Шаг 5/5: Генерация рекомендаций ──`);
 
     // Проверяем ещё раз перед дорогим вызовом Claude
     const checkBeforeRec = await db.report.findUnique({ where: { id: reportId }, select: { status: true } });
@@ -149,7 +165,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     await progress(job, { percent: 90, step: "Сохраняем результаты..." });
 
     // ═══════════════════════════════════════════════════════
-    // ШАГ 5: Сохранение в БД (транзакция)
+    // ШАГ 6: Сохранение в БД (транзакция)
     // ═══════════════════════════════════════════════════════
     console.log(`[Worker] ── Сохранение в БД ──`);
     const REPORT_COST = 10;
@@ -205,6 +221,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
           scoreLlmsTxt: analysis.scoreBreakdown.llmsTxt,
           scoreContent: analysis.scoreBreakdown.content,
           scoreAuthority: analysis.scoreBreakdown.authority,
+          digitalPr: JSON.parse(JSON.stringify(digitalPrResults)),
         },
       });
 
