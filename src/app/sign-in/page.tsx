@@ -58,7 +58,7 @@ function SignInForm() {
     <div className="flex min-h-screen items-center justify-center bg-[#F7F6F3] px-4">
       <Card className="w-full max-w-sm border-[#EAEAEA] bg-white shadow-none">
         <CardHeader className="text-center">
-          <CardTitle className="text-lg font-bold tracking-tighter text-[#1a1a1a]">Вход в GEO SaaS</CardTitle>
+          <CardTitle className="text-lg font-bold tracking-tighter text-[#1a1a1a]">Вход в Geo Studio</CardTitle>
           <CardDescription className="text-sm text-[#787774]">
             Введите свои данные для входа в систему
           </CardDescription>

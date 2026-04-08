@@ -169,7 +169,7 @@ export default async function SharedReportPage({
 
         {/* Footer */}
         <p className="text-center text-xs text-[#BBBBBB]">
-          Создано с помощью GEO SaaS — анализ AI-видимости сайтов
+          Создано с помощью Geo Studio — анализ AI-видимости сайтов
         </p>
       </div>
     </div>

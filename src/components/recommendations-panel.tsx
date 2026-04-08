@@ -409,7 +409,7 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
       : []),
     ``,
     `---`,
-    `Сгенерировано GEO SaaS · ${new Date().toLocaleDateString("ru-RU")}`,
+    `Сгенерировано Geo Studio · ${new Date().toLocaleDateString("ru-RU")}`,
   ].join("\n");
 
   const handleCopyTz = async () => {

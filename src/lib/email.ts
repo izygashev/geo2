@@ -4,7 +4,7 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "GEO SaaS <noreply@geo-saas.com>";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "Geo Studio <noreply@geo-saas.com>";
 
 interface ReportReadyEmailParams {
   to: string;
@@ -46,7 +46,7 @@ export async function sendReportReadyEmail(params: ReportReadyEmailParams) {
       Открыть отчёт →
     </a>
     <p style="color: #BBBBBB; font-size: 12px; margin: 24px 0 0; text-align: center;">
-      GEO SaaS — AI-видимость вашего сайта
+      Geo Studio — AI-видимость вашего сайта
     </p>
   </div>
 </body>
@@ -67,7 +67,7 @@ export async function sendReportReadyEmail(params: ReportReadyEmailParams) {
       Перейти к отчёту →
     </a>
     <p style="color: #BBBBBB; font-size: 12px; margin: 24px 0 0; text-align: center;">
-      GEO SaaS — AI-видимость вашего сайта
+      Geo Studio — AI-видимость вашего сайта
     </p>
   </div>
 </body>

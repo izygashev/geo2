@@ -12,7 +12,7 @@ export function Footer() {
             <div className="mb-3 flex items-center gap-2">
               <Globe className="h-4 w-4 text-[#787774]" />
               <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">
-                GEO SaaS
+                Geo Studio
               </span>
             </div>
             <p className="text-xs leading-relaxed text-[#787774]">
@@ -90,7 +90,7 @@ export function Footer() {
               hello@geosaas.com
             </a>
             <p className="text-[11px] text-[#BBBBBB]">
-              © {new Date().getFullYear()} GEO SaaS
+              © {new Date().getFullYear()} Geo Studio
             </p>
           </div>
         </div>

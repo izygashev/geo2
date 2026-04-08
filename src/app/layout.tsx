@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GEO SaaS — Аналитика упоминаний бренда",
+  title: "Geo Studio | AI Reputation Management",
   description:
     "B2B-платформа для отслеживания и оптимизации упоминаний бренда в ответах AI-систем",
 };

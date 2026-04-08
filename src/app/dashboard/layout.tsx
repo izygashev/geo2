@@ -45,7 +45,7 @@ export default async function DashboardLayout({
         {/* Logo */}
         <Link href="/" className="flex h-14 items-center gap-2 border-b border-[#EAEAEA] px-5 transition-colors hover:bg-[#F7F6F3]">
           <Globe className="h-4 w-4 text-[#787774]" />
-          <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">GEO SaaS</span>
+          <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">Geo Studio</span>
         </Link>
 
         {/* Navigation */}

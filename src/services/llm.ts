@@ -306,7 +306,7 @@ async function callWithFallback(
             "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
             "Content-Type": "application/json",
             "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-            "X-Title": "GEO SaaS",
+            "X-Title": "Geo Studio",
           },
           body: JSON.stringify({
             model: freeModel,
@@ -327,7 +327,7 @@ async function callWithFallback(
             "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
             "Content-Type": "application/json",
             "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-            "X-Title": "GEO SaaS",
+            "X-Title": "Geo Studio",
           },
           body: JSON.stringify({ model: freeModel, max_tokens: maxTokens, messages }),
         });

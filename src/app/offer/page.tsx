@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Footer } from "@/components/footer";
 
 export const metadata = {
-  title: "Публичная оферта — GEO SaaS",
+  title: "Публичная оферта — Geo Studio",
 };
 
 export default function OfferPage() {

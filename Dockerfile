@@ -1,5 +1,5 @@
 # ════════════════════════════════════════════════════════════
-# GEO SaaS — Production Dockerfile
+# Geo Studio — Production Dockerfile
 # Base: Playwright image (has system libs for headless Chromium)
 # ════════════════════════════════════════════════════════════
 

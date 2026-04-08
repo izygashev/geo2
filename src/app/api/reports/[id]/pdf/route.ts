@@ -79,7 +79,7 @@ export async function GET(
       headerTemplate: `
         <div style="font-size:8px; color:#78776F; width:100%; padding:0 12mm; display:flex; justify-content:space-between;">
           <span>${report.project.name}</span>
-          <span>GEO SaaS</span>
+          <span>Geo Studio</span>
         </div>
       `,
       footerTemplate: `

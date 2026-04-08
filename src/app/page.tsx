@@ -36,7 +36,7 @@ export default async function HomePage() {
               <Globe className="h-4 w-4 text-white" />
             </div>
             <span className="text-base font-bold tracking-tight">
-              Geo SaaS
+              Geo Studio
             </span>
           </Link>
 

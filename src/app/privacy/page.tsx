@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Footer } from "@/components/footer";
 
 export const metadata = {
-  title: "Политика конфиденциальности — GEO SaaS",
+  title: "Политика конфиденциальности — Geo Studio",
 };
 
 export default function PrivacyPage() {
