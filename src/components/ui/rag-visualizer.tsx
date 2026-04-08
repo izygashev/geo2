@@ -137,37 +137,37 @@ function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
       className={`group relative flex flex-col rounded-xl border transition-all duration-200 ${
         chunk.hasHeader
           ? "border-[#E5E5E3] bg-white hover:border-[#D5D5D5] hover:shadow-[0_4px_20px_rgba(0,0,0,0.04)]"
-          : "border-amber-200 bg-amber-50/40 hover:border-amber-300 hover:shadow-[0_4px_20px_rgba(245,158,11,0.06)]"
+          : "border-amber-200/70 bg-amber-50/30 hover:border-amber-300 hover:shadow-[0_4px_20px_rgba(245,158,11,0.06)]"
       }`}
     >
-      {/* Header row */}
+      {/* Header row — badges */}
       <div className="flex items-center justify-between gap-2 border-b border-[#F0F0EE] px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="flex h-5 w-5 items-center justify-center rounded bg-[#EEEEED] text-[10px] font-bold tabular-nums text-[#787774]">
-            {index + 1}
+          <span className="inline-flex items-center rounded-md border border-[#E5E5E3] bg-[#F5F5F4] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[#555]">
+            Чанк {index + 1}
           </span>
-          <span className="rounded-full bg-[#F5F5F4] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#999]">
+          <span className="inline-flex items-center rounded-md border border-[#EEEEED] bg-white px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#999]">
             ~{chunk.tokens.toLocaleString("ru-RU")} токенов
           </span>
         </div>
 
         {!chunk.hasHeader ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-600">
+          <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-600">
             <AlertTriangle className="h-2.5 w-2.5" />
             Нет заголовка
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-600">
+          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-600">
             <Hash className="h-2.5 w-2.5" />
             Заголовок
           </span>
         )}
       </div>
 
-      {/* Text preview — constrained, scrollable, premium mono look */}
-      <div className="px-4 py-3">
+      {/* Text preview — constrained, scrollable, clean sans-serif */}
+      <div className="px-4 py-3.5">
         <div
-          className={`rounded-lg bg-[#FAFAF9] border border-[#F0F0EE] p-3 text-[12px] leading-[1.7] text-[#666] font-mono ${
+          className={`rounded-lg bg-[#F7F6F3]/60 border border-[#EEEEED] p-4 text-sm leading-[1.75] text-[#555] ${
             expanded
               ? "max-h-60 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#D5D5D5]"
               : "line-clamp-6"
@@ -183,7 +183,7 @@ function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
         {isLong && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[#999] transition-colors hover:text-[#555]"
+            className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#999] transition-colors hover:text-[#555]"
           >
             {expanded ? (
               <>

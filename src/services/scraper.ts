@@ -171,7 +171,7 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       const clone = document.body.cloneNode(true) as HTMLElement;
 
       // Strip all non-content elements
-      const junkSelectors = "script, style, noscript, svg, link[rel='stylesheet'], iframe, canvas, video, audio, object, embed";
+      const junkSelectors = "script, style, noscript, svg, template, link[rel='stylesheet'], iframe, canvas, video, audio, object, embed";
       clone.querySelectorAll(junkSelectors).forEach((el) => el.remove());
 
       const selectors = ["main", "article", '[role="main"]', "#content", ".content"];
