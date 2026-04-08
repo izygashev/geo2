@@ -111,6 +111,7 @@ model Report {
   hasLlmsTxt      Boolean  @default(false)
   schemaOrgTypes  Json     @default("[]")
   contentLength   Int      @default(0)
+  scrapedBody     String?  @db.Text      // Полный bodyText для RAG-визуализации
 
   // ─── Новые технические проверки (scraper) ───────────
   robotsTxtAiFriendly Boolean @default(false)  // robots.txt не блокирует GPTBot/ClaudeBot/Google-Extended

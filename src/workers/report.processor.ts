@@ -195,6 +195,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
           hasLlmsTxt: siteData.hasLlmsTxt,
           schemaOrgTypes: siteData.schemaOrgTypes,
           contentLength: siteData.bodyText.length,
+          scrapedBody: siteData.bodyText.slice(0, 100_000), // RAG-визуализация (до 100k символов)
           robotsTxtAiFriendly: siteData.robotsTxtAiFriendly,
           semanticHtmlValid: siteData.semanticHtmlValid,
           categorySearched: dominantCategory,

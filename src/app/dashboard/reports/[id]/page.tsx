@@ -30,6 +30,7 @@ import { ShareReportButton } from "@/components/share-report-button";
 import { DeleteButton } from "@/components/delete-button";
 import { VisibilityTrendChart } from "@/components/visibility-trend-chart-wrapper";
 import { ContentGaps, type ContentGapItem } from "@/components/content-gaps";
+import { RagVisualizer } from "@/components/ui/rag-visualizer";
 
 export default async function ReportPage({
   params,
@@ -529,6 +530,20 @@ export default async function ReportPage({
               </div>
             )}
           </div>
+
+          {/* ROW 3.5: RAG Chunk Visualizer */}
+          {report.scrapedBody && (
+            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+              <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-[#787774] mb-1">
+                <FileText className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" />
+                Как ИИ видит ваш контент
+              </h2>
+              <p className="text-sm text-[#787774] mb-5">
+                Нейросети разбивают текст вашего сайта на блоки (чанки) по ~800 токенов. Блоки без заголовка теряют контекст при RAG-парсинге.
+              </p>
+              <RagVisualizer text={report.scrapedBody} />
+            </div>
+          )}
 
           {/* ROW 4: Content Gaps — AI Content Spy */}
           {(() => {
