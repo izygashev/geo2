@@ -52,6 +52,69 @@ export interface SiteData {
     headingHierarchyOk: boolean;  // H1 → H2 без пропусков
     headings: string[];           // Список найденных h-тегов: ["h1","h2","h2","h3"]
   };
+  // Entity SEO / Brand Passport
+  hasBrandPassport: boolean;      // sameAs содержит Wikidata, Crunchbase, LinkedIn, Яндекс.Карты
+  knowledgeGraphLinks: string[];  // Найденные sameAs-ссылки на Knowledge Graph
+}
+
+// ─── Brand Passport — Entity SEO via sameAs ────────────
+const KNOWLEDGE_GRAPH_PATTERNS = [
+  "wikidata.org",
+  "crunchbase.com",
+  "linkedin.com/company",
+  "yandex.ru/maps",
+  "wikipedia.org",
+  "dbpedia.org",
+  "g.co/kg",            // Google Knowledge Graph
+];
+
+function extractBrandPassport(schemaOrgData: Record<string, unknown>[]): {
+  hasBrandPassport: boolean;
+  knowledgeGraphLinks: string[];
+} {
+  const knowledgeGraphLinks: string[] = [];
+
+  for (const item of schemaOrgData) {
+    const type = String(item["@type"] ?? "").toLowerCase();
+    // Also check @graph arrays (common in Yoast, Rank Math, etc.)
+    const items: Record<string, unknown>[] =
+      Array.isArray(item["@graph"])
+        ? (item["@graph"] as Record<string, unknown>[])
+        : [item];
+
+    for (const entity of items) {
+      const entityType = String(entity["@type"] ?? "").toLowerCase();
+      const isOrgLike =
+        entityType.includes("organization") ||
+        entityType.includes("localbusiness") ||
+        entityType.includes("corporation") ||
+        entityType.includes("brand") ||
+        type.includes("organization") ||
+        type.includes("localbusiness");
+
+      if (!isOrgLike) continue;
+
+      const sameAs = entity["sameAs"] ?? entity["sameas"];
+      if (!sameAs) continue;
+
+      const urls: string[] = Array.isArray(sameAs)
+        ? sameAs.map(String)
+        : [String(sameAs)];
+
+      for (const u of urls) {
+        if (KNOWLEDGE_GRAPH_PATTERNS.some((p) => u.toLowerCase().includes(p))) {
+          if (!knowledgeGraphLinks.includes(u)) {
+            knowledgeGraphLinks.push(u);
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    hasBrandPassport: knowledgeGraphLinks.length > 0,
+    knowledgeGraphLinks,
+  };
 }
 
 // ─── Основная функция ───────────────────────────────────
@@ -312,6 +375,12 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       `[Scraper]    Semantic HTML: main=${semanticHtmlDetails.hasMain}, article=${semanticHtmlDetails.hasArticle}, hierarchy=${semanticHtmlDetails.headingHierarchyOk}`
     );
 
+    // ─── Brand Passport (Entity SEO) ──────────────────
+    const brandPassport = extractBrandPassport(schemaOrgData);
+    console.log(
+      `[Scraper]    Brand Passport: ${brandPassport.hasBrandPassport}${brandPassport.knowledgeGraphLinks.length > 0 ? ` (${brandPassport.knowledgeGraphLinks.join(", ")})` : ""}`
+    );
+
     return {
       url,
       title: title ?? "",
@@ -326,6 +395,8 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       robotsTxtBlockedBots,
       semanticHtmlValid,
       semanticHtmlDetails,
+      hasBrandPassport: brandPassport.hasBrandPassport,
+      knowledgeGraphLinks: brandPassport.knowledgeGraphLinks,
     };
   } catch (error) {
     console.error(`[Scraper] ❌ Playwright не смог загрузить ${url}:`, error instanceof Error ? error.message : error);
@@ -410,6 +481,11 @@ export async function scrapeSite(url: string): Promise<SiteData> {
 
       console.log(`[Scraper] ✅ (fetch) title="${titleMatch?.[1]?.slice(0, 50)}", llms.txt: ${hasLlmsTxt}`);
 
+      const brandPassportFb = extractBrandPassport(schemaOrgData);
+      console.log(
+        `[Scraper]    (fetch) Brand Passport: ${brandPassportFb.hasBrandPassport}${brandPassportFb.knowledgeGraphLinks.length > 0 ? ` (${brandPassportFb.knowledgeGraphLinks.join(", ")})` : ""}`
+      );
+
       return {
         url,
         title: titleMatch?.[1]?.trim() ?? "",
@@ -432,6 +508,8 @@ export async function scrapeSite(url: string): Promise<SiteData> {
           headingHierarchyOk,
           headings,
         },
+        hasBrandPassport: brandPassportFb.hasBrandPassport,
+        knowledgeGraphLinks: brandPassportFb.knowledgeGraphLinks,
       };
     }
 
