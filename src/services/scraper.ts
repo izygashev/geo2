@@ -264,6 +264,31 @@ export async function scrapeSite(url: string): Promise<SiteData> {
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 
+      // 4. Final line-level filter — destroy any CSS/JS lines that survived
+      result = result
+        .split("\n")
+        .filter((line: string) => {
+          const t = line.trim();
+          if (!t) return true; // keep blank lines for paragraph breaks
+          // Drop lines containing CSS/JS block syntax
+          if (t.includes("{") || t.includes("}")) return false;
+          // Drop lines that look like CSS properties: "property: value;"
+          if (/^[a-z-]+\s*:\s*.+;$/i.test(t)) return false;
+          // Drop lines with CSS selectors: ".class", "#id", "tag:pseudo"
+          if (/^[.#][\w-]+|^\w+:(?:hover|focus|active|nth|first|last|before|after)/.test(t)) return false;
+          // Drop lines with @-rules: @keyframes, @media, @import
+          if (/^@(?:keyframes|media|import|font-face|charset|supports)\b/.test(t)) return false;
+          // Drop lines that are pure JS: assignments, function calls
+          if (/^(?:var|let|const|function|return|if|else|for|while|switch)\b/.test(t)) return false;
+          // Drop lines that are predominantly semicolons/symbols
+          const symbolChars = (t.match(/[{};:=()[\]<>]/g) || []).length;
+          if (t.length > 5 && symbolChars / t.length > 0.25) return false;
+          return true;
+        })
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
       return result.slice(0, 15000);
     });
 
@@ -544,6 +569,24 @@ export async function scrapeSite(url: string): Promise<SiteData> {
         .replace(/[0-9a-f]{20,}/gi, " ")
         // Collapse whitespace
         .replace(/\s+/g, " ")
+        .trim();
+
+      // Line-level filter — destroy any CSS/JS lines that survived
+      const bodyTextCleaned = bodyTextMatch
+        .split(/\.\s+/)
+        .filter((sentence: string) => {
+          const t = sentence.trim();
+          if (!t || t.length < 3) return false;
+          if (t.includes("{") || t.includes("}")) return false;
+          if (/^[a-z-]+\s*:\s*.+;$/i.test(t)) return false;
+          if (/^@(?:keyframes|media|import|font-face)\b/.test(t)) return false;
+          if (/^(?:var|let|const|function|return|if|else|for|while)\b/.test(t)) return false;
+          const symbolChars = (t.match(/[{};:=()[\]<>]/g) || []).length;
+          if (t.length > 5 && symbolChars / t.length > 0.25) return false;
+          return true;
+        })
+        .join(". ")
+        .replace(/\s{2,}/g, " ")
         .trim()
         .slice(0, 15000);
 
@@ -620,7 +663,7 @@ export async function scrapeSite(url: string): Promise<SiteData> {
         title: titleMatch?.[1]?.trim() ?? "",
         description: descMatch?.[1]?.trim() ?? "",
         h1: h1Match?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "",
-        bodyText: bodyTextMatch,
+        bodyText: bodyTextCleaned,
         hasLlmsTxt,
         llmsTxtContent,
         schemaOrgTypes,

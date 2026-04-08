@@ -646,14 +646,6 @@ export default async function ReportPage({
           {/* ═══════════════════════════════════════════════════ */}
           {report.scrapedBody && (
             <div>
-              <div className="mb-4 text-center">
-                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-                  Как ИИ видит ваш контент
-                </p>
-                <p className="mt-1 text-[11px] text-[#BBBBBB]">
-                  Нейросети разбивают текст на блоки по ~800 токенов — блоки без заголовка теряют контекст
-                </p>
-              </div>
               <Card className="border-[#EAEAEA] bg-white shadow-none">
                 <CardContent className="px-6 pt-6 pb-6">
                   <RagVisualizer text={report.scrapedBody} />

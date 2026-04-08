@@ -1,7 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Layers, Hash, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  AlertTriangle,
+  Layers,
+  Hash,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Sparkles,
+  Info,
+  Bot,
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 /* ── Token estimation helpers ── */
 
@@ -9,12 +20,10 @@ const CHARS_PER_TOKEN = 4;
 const TARGET_CHUNK_TOKENS = 800;
 const TARGET_CHUNK_CHARS = TARGET_CHUNK_TOKENS * CHARS_PER_TOKEN;
 
-/** Rough token count: 1 token ≈ 4 characters */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
-/** Header pattern: lines that look like markdown headings or HTML h1-h6 */
 const HEADER_RE = /^(?:#{1,6}\s|<h[1-6][\s>])/i;
 
 function startsWithHeader(text: string): boolean {
@@ -30,78 +39,73 @@ function startsWithHeader(text: string): boolean {
  */
 function sanitizeText(raw: string): string {
   let text = raw
-    // Remove inline <script>…</script>, <style>…</style>, <noscript>, <svg>, <template> leftovers
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
     .replace(/<svg[\s\S]*?<\/svg>/gi, "")
     .replace(/<template[\s\S]*?<\/template>/gi, "")
-    // Strip stray HTML tags
     .replace(/<[^>]+>/g, " ")
 
-    // ── JS framework patterns ──
-    // IIFEs and named functions
+    // JS framework patterns
     .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}/g, "")
     .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}\)/g, "")
     .replace(/function\s+\w+\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}/g, "")
-    // var/let/const declarations with code
     .replace(/(?:var|let|const)\s+\w+\s*=\s*[\s\S]{0,500}?;/g, "")
-    // Next.js specific
     .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,1000}?\)/g, "")
     .replace(/self\.__next_f\.push[\s\S]{0,1000}?\)/g, "")
     .replace(/static\/chunks\/[\w\-.]+\.js/g, "")
 
-    // ── Tilda-specific patterns ──
-    // Tilda function names: t_menuburger_init, t_lazyload_init, etc.
+    // Tilda-specific
     .replace(/\bt_\w+_init\b[^.]*?\./g, "")
-    // Tilda block IDs: t228, t390, t396__elem, etc.
     .replace(/\bt\d{3,}[_.][\w.]+/g, "")
-    // Tilda CSS class names: .t-menuburger, .t-container, .t-store__filter
     .replace(/\.t-[\w-]+/g, "")
-    // jQuery-style selectors: $(".t-menuburger").click(...)
     .replace(/\$\(\s*["'][^"']+["']\s*\)[^;]{0,200};/g, "")
 
-    // ── CSS leaks ──
-    // CSS property blocks: display:flex;justify-content:center;…
+    // CSS leaks
     .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, "")
-    // CSS class definitions: .classname { ... }
     .replace(/\.[\w-]+\s*\{[^}]*\}/g, "")
 
-    // ── Data/binary leaks ──
-    // Stray JSON blobs (3+ properties)
+    // Data/binary leaks
     .replace(/\{(?:"[\w]+":\s*(?:"[^"]*"|[\d.]+|true|false|null|(?:\{[^}]*\}))\s*,?\s*){3,}\}/g, "")
-    // Stray curly brace blocks
     .replace(/\{[^}]{0,300}\}/g, " ")
-    // Base64 data URIs
     .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, "")
-    // Long hex/hash strings (>20 chars) — asset hashes or tokens
     .replace(/[0-9a-f]{20,}/gi, "")
-    // Escaped unicode sequences
     .replace(/(?:\\u[0-9a-f]{4}|\\x[0-9a-f]{2}){3,}/gi, "")
-    // data-* attribute values
     .replace(/data-[\w-]+=["'][^"']*["']/g, "")
-
-    // ── JS keyword leaks ──
     .replace(/\b(?:function|return|typeof|undefined|null|window\.|document\.)\b[^.!?\n]{0,100}/g, "")
 
-    // Collapse excessive whitespace
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // Final pass: drop paragraphs that still look like code
+  // Line-level filter — destroy any CSS/JS lines that survived
+  text = text
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return true;
+      if (t.includes("{") || t.includes("}")) return false;
+      if (/^[a-z-]+\s*:\s*.+;$/i.test(t)) return false;
+      if (/^[.#][\w-]+|^\w+:(?:hover|focus|active|nth|first|last|before|after)/.test(t)) return false;
+      if (/^@(?:keyframes|media|import|font-face|charset|supports)\b/.test(t)) return false;
+      if (/^(?:var|let|const|function|return|if|else|for|while|switch)\b/.test(t)) return false;
+      const symbolChars = (t.match(/[{};:=()[\]<>]/g) || []).length;
+      if (t.length > 5 && symbolChars / t.length > 0.25) return false;
+      return true;
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  // Paragraph-level filter
   const paragraphs = text.split("\n\n");
   const cleaned = paragraphs.filter((para) => {
     const trimmed = para.trim();
     if (!trimmed || trimmed.length < 3) return false;
-    // Code density check: {, }, ;, =, (, ), =>
     const codeChars = (trimmed.match(/[{};=()]/g) || []).length;
     const ratio = codeChars / trimmed.length;
-    // Drop if >12% code characters (unless it's a very long real paragraph)
     if (ratio > 0.12 && trimmed.length < 600) return false;
-    // Drop if it looks like a function call chain: foo.bar().baz()
     if (/\w+\.\w+\([^)]*\)\.\w+\(/.test(trimmed)) return false;
-    // Drop if it starts with JS keywords
     if (/^\s*(?:if|else|for|while|switch|case|try|catch)\s*[\({]/.test(trimmed)) return false;
     return true;
   });
@@ -117,10 +121,6 @@ interface Chunk {
   hasHeader: boolean;
 }
 
-/**
- * Split text into chunks of ≈800 tokens each.
- * Tries to break on paragraph boundaries (\n\n) to keep content coherent.
- */
 function chunkText(text: string): Chunk[] {
   if (!text || text.trim().length === 0) return [];
 
@@ -133,7 +133,6 @@ function chunkText(text: string): Chunk[] {
     const combined = buffer ? `${buffer}\n\n${para}` : para;
 
     if (combined.length > TARGET_CHUNK_CHARS && buffer.length > 0) {
-      // flush the buffer as a chunk
       id++;
       chunks.push({
         id,
@@ -147,7 +146,6 @@ function chunkText(text: string): Chunk[] {
     }
   }
 
-  // remaining buffer
   if (buffer.trim().length > 0) {
     id++;
     chunks.push({
@@ -161,52 +159,62 @@ function chunkText(text: string): Chunk[] {
   return chunks;
 }
 
-/* ── Sub-components ── */
+/* ── Chunk Card — "AI Vision" terminal aesthetic ── */
 
 function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
   const [expanded, setExpanded] = useState(false);
-  const preview = chunk.text.slice(0, 320);
-  const isLong = chunk.text.length > 320;
+  const preview = chunk.text.slice(0, 280);
+  const isLong = chunk.text.length > 280;
 
   return (
-    <div
-      className={`group relative flex flex-col rounded-xl border transition-all duration-200 ${
-        chunk.hasHeader
-          ? "border-[#E5E5E3] bg-white hover:border-[#D5D5D5] hover:shadow-[0_4px_20px_rgba(0,0,0,0.04)]"
-          : "border-amber-200/70 bg-amber-50/30 hover:border-amber-300 hover:shadow-[0_4px_20px_rgba(245,158,11,0.06)]"
-      }`}
-    >
-      {/* Header row — badges */}
-      <div className="flex items-center justify-between gap-2 border-b border-[#F0F0EE] px-4 py-2.5">
+    <div className="group relative flex flex-col rounded-xl border border-[#E5E5E3] bg-white transition-all duration-200 hover:border-[#D5D5D5] hover:shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+      {/* Terminal-style header bar */}
+      <div className="flex items-center justify-between gap-2 rounded-t-xl bg-[#1a1a1a] px-4 py-2">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded-md border border-[#E5E5E3] bg-[#F5F5F4] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[#555]">
-            Чанк {index + 1}
-          </span>
-          <span className="inline-flex items-center rounded-md border border-[#EEEEED] bg-white px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#999]">
-            ~{chunk.tokens.toLocaleString("ru-RU")} токенов
+          {/* Fake terminal dots */}
+          <div className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-[#B02A37]/80" />
+            <span className="h-2 w-2 rounded-full bg-[#B08D19]/80" />
+            <span className="h-2 w-2 rounded-full bg-[#2D6A4F]/80" />
+          </div>
+          <span className="ml-1 text-[11px] font-medium text-white/50">
+            Блок {index + 1}
           </span>
         </div>
 
-        {!chunk.hasHeader ? (
-          <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-600">
-            <AlertTriangle className="h-2.5 w-2.5" />
-            Нет заголовка
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] tabular-nums text-white/40">
+            ~{chunk.tokens.toLocaleString("ru-RU")} токенов
           </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-600">
-            <Hash className="h-2.5 w-2.5" />
-            Заголовок
-          </span>
-        )}
+          {!chunk.hasHeader ? (
+            <span className="inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+              <AlertTriangle className="h-2.5 w-2.5" />
+              Без заголовка
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+              <Hash className="h-2.5 w-2.5" />
+              Заголовок
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Text preview — constrained, scrollable, clean sans-serif */}
-      <div className="px-4 py-3.5">
+      {/* "AI vision" badge */}
+      <div className="flex items-center gap-1.5 border-b border-[#F0F0EE] px-4 py-1.5">
+        <Eye className="h-3 w-3 text-[#BBBBBB]" />
+        <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#BBBBBB]">
+          То, что видит ИИ
+        </span>
+      </div>
+
+      {/* Text content — raw data aesthetic */}
+      <div className="px-4 py-3">
         <div
-          className={`rounded-lg bg-[#F7F6F3]/60 border border-[#EEEEED] p-4 text-sm leading-[1.75] text-[#555] ${
+          className={`rounded-lg bg-[#FAFAF9] border border-[#EEEEED] p-3.5 font-mono text-[13px] leading-[1.7] text-[#444] ${
             expanded
-              ? "max-h-60 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#D5D5D5]"
-              : "line-clamp-6"
+              ? "max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#D5D5D5]"
+              : "max-h-48 overflow-hidden"
           }`}
         >
           <p className="m-0 whitespace-pre-wrap break-words">
@@ -215,11 +223,10 @@ function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
           </p>
         </div>
 
-        {/* Expand/collapse toggle */}
         {isLong && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#999] transition-colors hover:text-[#555]"
+            className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[#999] transition-colors hover:text-[#555]"
           >
             {expanded ? (
               <>
@@ -259,12 +266,48 @@ export function RagVisualizer({ text }: RagVisualizerProps) {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Summary bar */}
+    <div className="space-y-6">
+      {/* ── Educational Header ── */}
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#1a1a1a]">
+            <Bot className="h-4.5 w-4.5 text-white/80" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
+              Как нейросети читают ваш сайт
+            </h3>
+            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-[#BBBBBB]">
+              RAG-анализ
+            </p>
+          </div>
+        </div>
+
+        <p className="text-[13.5px] leading-[1.75] text-[#555]">
+          LLM-модели (ChatGPT, Claude, Яндекс.Нейро) не&nbsp;видят ваш красивый дизайн.
+          Они сканируют сайт и&nbsp;разрезают его на&nbsp;смысловые текстовые блоки
+          (чанки). Если ИИ видит здесь сплошной код или текст без заголовков&nbsp;—
+          он&nbsp;не&nbsp;сможет понять, чем занимается ваш бизнес, и&nbsp;порекомендует конкурентов.
+        </p>
+
+        {/* Value proposition callout */}
+        <Alert className="border-[#2D6A4F]/20 bg-[#2D6A4F]/[0.04]">
+          <Sparkles className="h-4 w-4 text-[#2D6A4F]" />
+          <AlertTitle className="text-[13px] font-semibold text-[#2D6A4F]">
+            Ценность
+          </AlertTitle>
+          <AlertDescription className="text-[13px] leading-relaxed text-[#2D6A4F]/80">
+            Чистая структура чанков = попадание в&nbsp;ответы нейросетей и&nbsp;бесплатные лиды.
+            Мы&nbsp;оптимизируем контент так, чтобы ИИ мог точно процитировать ваш бизнес.
+          </AlertDescription>
+        </Alert>
+      </div>
+
+      {/* ── Summary metrics bar ── */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#EAEAEA] bg-white px-5 py-3">
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-[#787774]" />
-          <span className="text-sm font-semibold text-[#1a1a1a]">RAG-чанки</span>
+          <span className="text-sm font-semibold text-[#1a1a1a]">Результат разбиения</span>
         </div>
 
         <div className="h-4 w-px bg-[#EAEAEA]" />
@@ -288,18 +331,23 @@ export function RagVisualizer({ text }: RagVisualizerProps) {
         )}
       </div>
 
-      {/* Info banner */}
+      {/* ── Warning banner for chunks without headers ── */}
       {warningCount > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/50 px-5 py-3">
-          <p className="text-[13px] leading-relaxed text-amber-800">
-            <strong>Совет:</strong> Чанки без заголовка теряют контекст при RAG-парсинге.
-            Добавьте H2/H3 перед каждым смысловым блоком, чтобы ИИ точнее понимал тему раздела.
-          </p>
-        </div>
+        <Alert className="border-amber-200 bg-amber-50/50">
+          <Info className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-[13px] font-semibold text-amber-800">
+            Проблема: блоки без заголовков
+          </AlertTitle>
+          <AlertDescription className="text-[13px] leading-relaxed text-amber-700">
+            {warningCount} из {chunks.length} блоков не&nbsp;содержат заголовка.
+            Когда нейросеть выбирает, какой фрагмент процитировать, блоки без&nbsp;H2/H3
+            теряют контекст и&nbsp;уступают конкурентам с&nbsp;чётко размеченным контентом.
+          </AlertDescription>
+        </Alert>
       )}
 
-      {/* Chunk grid */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* ── Chunk grid ── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {chunks.map((chunk, i) => (
           <ChunkCard key={chunk.id} chunk={chunk} index={i} />
         ))}
