@@ -559,8 +559,13 @@ export default async function ReportPage({
                   : `Упоминания на ${platformLabel} не найдены`;
               }
 
-              // Already Russian — return as-is
-              if (/[а-яА-ЯёЁ]/.test(ctx)) return ctx;
+              // Check if text is predominantly Russian (>40% Cyrillic letters)
+              const cyrillicCount = (ctx.match(/[а-яА-ЯёЁ]/g) || []).length;
+              const latinCount = (ctx.match(/[a-zA-Z]/g) || []).length;
+              const totalLetters = cyrillicCount + latinCount;
+              const isPredominantlyRussian = totalLetters > 0 && (cyrillicCount / totalLetters) > 0.4;
+
+              if (isPredominantlyRussian) return ctx;
 
               // English text from legacy reports — translate to Russian
               const platformLabel = PLATFORM_LABELS[platform] ?? platform;
