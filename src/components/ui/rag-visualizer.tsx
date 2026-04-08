@@ -26,6 +26,7 @@ function startsWithHeader(text: string): boolean {
  * Strip residual JS/CSS artifacts that may have leaked into scrapedBody
  * from older reports stored before the scraper fix.
  * Must be aggressive — B2B users should never see raw code.
+ * Covers: Next.js, Webpack, Vite, Nuxt, Tilda, Webflow, Wix.
  */
 function sanitizeText(raw: string): string {
   let text = raw
@@ -37,37 +38,72 @@ function sanitizeText(raw: string): string {
     .replace(/<template[\s\S]*?<\/template>/gi, "")
     // Strip stray HTML tags
     .replace(/<[^>]+>/g, " ")
-    // Common minified JS patterns (Next.js, Webpack, Vite, Nuxt)
-    .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}/g, "")
-    .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}\)/g, "")
-    .replace(/var\s+__[A-Z_]+=[\s\S]{0,1000}?;/g, "")
+
+    // ── JS framework patterns ──
+    // IIFEs and named functions
+    .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}/g, "")
+    .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}\)/g, "")
+    .replace(/function\s+\w+\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}/g, "")
+    // var/let/const declarations with code
+    .replace(/(?:var|let|const)\s+\w+\s*=\s*[\s\S]{0,500}?;/g, "")
+    // Next.js specific
     .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,1000}?\)/g, "")
     .replace(/self\.__next_f\.push[\s\S]{0,1000}?\)/g, "")
-    // Webpack/Vite chunk hashes: e.g. "static/chunks/abc123-def456.js"
-    .replace(/static\/chunks\/[\w\-\.]+\.js/g, "")
-    // Stray JSON blobs (e.g. {"prop":"value",...})
+    .replace(/static\/chunks\/[\w\-.]+\.js/g, "")
+
+    // ── Tilda-specific patterns ──
+    // Tilda function names: t_menuburger_init, t_lazyload_init, etc.
+    .replace(/\bt_\w+_init\b[^.]*?\./g, "")
+    // Tilda block IDs: t228, t390, t396__elem, etc.
+    .replace(/\bt\d{3,}[_.][\w.]+/g, "")
+    // Tilda CSS class names: .t-menuburger, .t-container, .t-store__filter
+    .replace(/\.t-[\w-]+/g, "")
+    // jQuery-style selectors: $(".t-menuburger").click(...)
+    .replace(/\$\(\s*["'][^"']+["']\s*\)[^;]{0,200};/g, "")
+
+    // ── CSS leaks ──
+    // CSS property blocks: display:flex;justify-content:center;…
+    .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, "")
+    // CSS class definitions: .classname { ... }
+    .replace(/\.[\w-]+\s*\{[^}]*\}/g, "")
+
+    // ── Data/binary leaks ──
+    // Stray JSON blobs (3+ properties)
     .replace(/\{(?:"[\w]+":\s*(?:"[^"]*"|[\d.]+|true|false|null|(?:\{[^}]*\}))\s*,?\s*){3,}\}/g, "")
-    // CSS-like property blocks: display:flex;justify-content:center;…
-    .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){3,}/gi, "")
+    // Stray curly brace blocks
+    .replace(/\{[^}]{0,300}\}/g, " ")
     // Base64 data URIs
     .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, "")
-    // Long hex/hash strings (>20 chars) — likely asset hashes or tokens
+    // Long hex/hash strings (>20 chars) — asset hashes or tokens
     .replace(/[0-9a-f]{20,}/gi, "")
-    // Escaped unicode sequences (e.g. \u003c, \x3c)
+    // Escaped unicode sequences
     .replace(/(?:\\u[0-9a-f]{4}|\\x[0-9a-f]{2}){3,}/gi, "")
+    // data-* attribute values
+    .replace(/data-[\w-]+=["'][^"']*["']/g, "")
+
+    // ── JS keyword leaks ──
+    .replace(/\b(?:function|return|typeof|undefined|null|window\.|document\.)\b[^.!?\n]{0,100}/g, "")
+
     // Collapse excessive whitespace
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // Final pass: if a "paragraph" still looks like code (high density of {, }, ;, =, =>)
-  // remove it entirely
-  const lines = text.split("\n\n");
-  const cleaned = lines.filter((para) => {
-    const codeChars = (para.match(/[{};=()]/g) || []).length;
-    const ratio = codeChars / Math.max(para.length, 1);
-    // If >15% of characters are code syntax AND the paragraph is short-ish, drop it
-    return ratio < 0.15 || para.length > 500;
+  // Final pass: drop paragraphs that still look like code
+  const paragraphs = text.split("\n\n");
+  const cleaned = paragraphs.filter((para) => {
+    const trimmed = para.trim();
+    if (!trimmed || trimmed.length < 3) return false;
+    // Code density check: {, }, ;, =, (, ), =>
+    const codeChars = (trimmed.match(/[{};=()]/g) || []).length;
+    const ratio = codeChars / trimmed.length;
+    // Drop if >12% code characters (unless it's a very long real paragraph)
+    if (ratio > 0.12 && trimmed.length < 600) return false;
+    // Drop if it looks like a function call chain: foo.bar().baz()
+    if (/\w+\.\w+\([^)]*\)\.\w+\(/.test(trimmed)) return false;
+    // Drop if it starts with JS keywords
+    if (/^\s*(?:if|else|for|while|switch|case|try|catch)\s*[\({]/.test(trimmed)) return false;
+    return true;
   });
   text = cleaned.join("\n\n");
 

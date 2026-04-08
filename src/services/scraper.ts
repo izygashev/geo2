@@ -164,30 +164,107 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       .catch(() => "");
 
     // Основной текст страницы (до 15000 символов)
-    // CRITICAL: Remove script/style/noscript/svg BEFORE extracting textContent
-    // to prevent minified JS/CSS from leaking into RAG chunks.
+    // CRITICAL: Extract text ONLY from content-bearing elements to prevent
+    // Tilda/Webflow/Next.js inline JS/CSS from leaking into RAG chunks.
     const bodyText = await page.evaluate(() => {
       // Clone body so we don't mutate the live DOM (needed for later checks)
       const clone = document.body.cloneNode(true) as HTMLElement;
 
-      // Strip all non-content elements
-      const junkSelectors = "script, style, noscript, svg, template, link[rel='stylesheet'], iframe, canvas, video, audio, object, embed";
+      // 1. Strip ALL non-content elements aggressively
+      const junkSelectors = [
+        "script", "style", "noscript", "svg", "template", "iframe",
+        "canvas", "video", "audio", "object", "embed", "map",
+        "link[rel='stylesheet']", "link[rel='preload']",
+        // Tilda-specific: navigation, popups, technical blocks
+        "[data-tilda-root-zone-menuid]", ".t-menuburger", ".t-tildalabel",
+        ".t-popup", ".t-store__filter", ".t228", ".t390",
+        // Generic: navigation, footer, sidebars
+        "nav", "header", "footer", "aside",
+        "[role='navigation']", "[role='banner']", "[role='contentinfo']",
+        // Form internals, hidden elements
+        "select", "option", "input", "textarea", "button",
+        "[style*='display:none']", "[style*='display: none']",
+        "[hidden]", ".hidden", ".sr-only",
+      ].join(", ");
       clone.querySelectorAll(junkSelectors).forEach((el) => el.remove());
 
-      const selectors = ["main", "article", '[role="main"]', "#content", ".content"];
-      for (const sel of selectors) {
-        const el = clone.querySelector(sel);
-        if (el && el.textContent && el.textContent.trim().length > 100) {
-          return el.textContent
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 15000);
+      // 2. Extract text ONLY from content-bearing elements
+      const contentSelectors = "p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, figcaption, dt, dd, summary, caption, label, legend";
+      
+      // Try content containers first
+      const containerSelectors = ["main", "article", '[role="main"]', "#content", ".content", "#rec", '[class*="t-container"]'];
+      let scope: HTMLElement = clone;
+      for (const sel of containerSelectors) {
+        const el = clone.querySelector(sel) as HTMLElement | null;
+        if (el && el.textContent && el.textContent.trim().length > 200) {
+          scope = el;
+          break;
         }
       }
-      return (clone.textContent ?? "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 15000);
+
+      // Collect text from content elements
+      const contentEls = scope.querySelectorAll(contentSelectors);
+      const fragments: string[] = [];
+      const seen = new Set<string>();
+
+      for (const el of contentEls) {
+        const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+        // Skip empty, too short, duplicate, or code-like text
+        if (!txt || txt.length < 3) continue;
+        if (seen.has(txt)) continue;
+        // Code detection: skip if >10% of chars are code syntax {;=()=>
+        const codeChars = (txt.match(/[{};=()=>]/g) || []).length;
+        if (codeChars / txt.length > 0.10) continue;
+        // Skip CSS-like strings: "display:flex;margin:0;..."
+        if (/(?:[a-z-]+\s*:\s*[^;]{1,30};\s*){3,}/.test(txt)) continue;
+        // Skip JS function signatures: "function t_menuburger_init(..."
+        if (/function\s+\w+\s*\(/.test(txt)) continue;
+        seen.add(txt);
+        fragments.push(txt);
+      }
+
+      // If content elements yielded very little, fall back to divs/spans with text
+      if (fragments.join(" ").length < 300) {
+        const fallbackEls = scope.querySelectorAll("div, span, a");
+        for (const el of fallbackEls) {
+          // Only direct text nodes — skip if element has many child elements
+          if (el.children.length > 3) continue;
+          const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+          if (!txt || txt.length < 5 || txt.length > 2000) continue;
+          if (seen.has(txt)) continue;
+          const codeChars = (txt.match(/[{};=()=>]/g) || []).length;
+          if (codeChars / txt.length > 0.08) continue;
+          if (/(?:[a-z-]+\s*:\s*[^;]{1,30};\s*){2,}/.test(txt)) continue;
+          if (/function\s+\w+\s*\(/.test(txt)) continue;
+          if (/^\s*(?:var|let|const|if|else|return|window|document)\b/.test(txt)) continue;
+          seen.add(txt);
+          fragments.push(txt);
+        }
+      }
+
+      let result = fragments.join("\n\n");
+
+      // 3. Final regex cleanup — catch anything that slipped through
+      result = result
+        // Tilda function names: t_menuburger_init, t_lazyload_init, etc.
+        .replace(/\bt_\w+_init\b[^.]*\./g, "")
+        .replace(/\bt\d{3,}[_.][\w.]+/g, "")
+        // CSS property leaks
+        .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, "")
+        // Stray curly brace blocks: { ... }
+        .replace(/\{[^}]{0,200}\}/g, " ")
+        // JS keywords followed by code
+        .replace(/\b(?:function|var|let|const|return|if|else|typeof|undefined|null|true|false|window\.|document\.)\b[^.!?\n]{0,100}/g, "")
+        // data-* attribute values that leaked
+        .replace(/data-[\w-]+=["'][^"']*["']/g, "")
+        // Orphaned CSS class names: .t-class-name
+        .replace(/\.t-[\w-]+/g, "")
+        // Collapse whitespace
+        .replace(/[ \t]{2,}/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      return result.slice(0, 15000);
     });
 
     // ─── Schema.org (JSON-LD) ──────────────────────────
@@ -433,15 +510,38 @@ export async function scrapeSite(url: string): Promise<SiteData> {
         .replace(/<object[\s\S]*?<\/object>/gi, "")
         .replace(/<embed[\s\S]*?<\/embed>/gi, "")
         .replace(/<template[\s\S]*?<\/template>/gi, "")
+        .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+        .replace(/<header[\s\S]*?<\/header>/gi, "")
+        .replace(/<footer[\s\S]*?<\/footer>/gi, "")
         .replace(/<link[^>]*>/gi, "")
-        // Strip remaining HTML tags
+        // Strip all HTML tags, keeping only text
         .replace(/<[^>]+>/g, " ")
-        // Remove leaked JS artifacts: IIFE, var __NEXT, self.__next, JSON blobs, etc.
+        // ── JS cleanup: IIFEs, Tilda functions, Next.js, Webpack ──
         .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}/g, " ")
         .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}\)/g, " ")
+        .replace(/function\s+\w+\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}/g, " ")
         .replace(/var\s+__[A-Z_]+=[\s\S]{0,1000}?;/g, " ")
         .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,1000}?\)/g, " ")
-        .replace(/\{"[\w]+":/g, " ")  // stray JSON objects
+        .replace(/self\.__next_f\.push[\s\S]{0,1000}?\)/g, " ")
+        // Tilda-specific patterns
+        .replace(/\bt_\w+_init\b[^.]*?\./g, " ")
+        .replace(/\bt\d{3,}[_.][\w.]+/g, " ")
+        .replace(/\.t-[\w-]+/g, " ")
+        .replace(/\$\(\s*["'][^"']+["']\s*\)[^;]{0,200};/g, " ")
+        // Stray JSON objects
+        .replace(/\{(?:"[\w]+":\s*(?:"[^"]*"|[\d.]+|true|false|null|(?:\{[^}]*\}))\s*,?\s*){3,}\}/g, " ")
+        // CSS property blocks: display:flex;justify-content:center;…
+        .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, " ")
+        // Stray curly brace blocks
+        .replace(/\{[^}]{0,300}\}/g, " ")
+        // JS keywords followed by code
+        .replace(/\b(?:var|let|const|return|typeof|undefined|window\.|document\.)\b[^.!?\n]{0,100}/g, " ")
+        // data-* attributes that leaked
+        .replace(/data-[\w-]+=["'][^"']*["']/g, " ")
+        // Base64 data URIs
+        .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, " ")
+        // Long hex/hash strings
+        .replace(/[0-9a-f]{20,}/gi, " ")
         // Collapse whitespace
         .replace(/\s+/g, " ")
         .trim()
