@@ -362,6 +362,8 @@ async function callWithFallback(
 export async function generateKeywords(siteData: SiteData): Promise<KeywordItem[]> {
   console.log(`[LLM] 🔑 Генерирую ключевые запросы для ${siteData.url}`);
 
+  const currentYear = new Date().getFullYear();
+
   try {
     const rawText = await callWithFallback(
       [
@@ -369,6 +371,8 @@ export async function generateKeywords(siteData: SiteData): Promise<KeywordItem[
           role: "system",
           content: `You are an SEO and GEO (Generative Engine Optimization) expert. 
 Your task is to generate search queries that a potential customer might ask an AI assistant (ChatGPT, Perplexity, Claude) when looking for a product or service like the one on this website.
+
+CRITICAL: The current year is ${currentYear}. If any query includes a year, you MUST use ${currentYear}. Ignore any outdated years (like 2024 or 2025) that might appear in the scraped website content.
 
 Return ONLY valid JSON, no explanations or markdown.`,
         },
@@ -385,12 +389,12 @@ Content (first 15000 chars): ${siteData.bodyText.slice(0, 15000)}
 Return JSON in this exact format:
 {
   "keywords": [
-    { "query": "best [category] tools in 2025", "intent": "informational" },
+    { "query": "best [category] tools in ${currentYear}", "intent": "informational" },
     { "query": "what is the best [specific solution]", "intent": "commercial" }
   ]
 }
 
-Generate exactly 5 diverse queries: mix of informational, commercial, and navigational intent.`,
+Generate exactly 5 diverse queries: mix of informational, commercial, and navigational intent. Remember: always use the year ${currentYear}, never outdated years.`,
         },
       ],
       1000,
