@@ -25,23 +25,53 @@ function startsWithHeader(text: string): boolean {
 /**
  * Strip residual JS/CSS artifacts that may have leaked into scrapedBody
  * from older reports stored before the scraper fix.
+ * Must be aggressive — B2B users should never see raw code.
  */
 function sanitizeText(raw: string): string {
-  return raw
-    // Remove inline <script>…</script> and <style>…</style> leftovers
+  let text = raw
+    // Remove inline <script>…</script>, <style>…</style>, <noscript>, <svg>, <template> leftovers
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
     .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+    .replace(/<template[\s\S]*?<\/template>/gi, "")
     // Strip stray HTML tags
     .replace(/<[^>]+>/g, " ")
-    // Remove common minified JS patterns (e.g. "!function(e){…}", "var __NEXT_DATA__=…")
-    .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,500}\}/g, "")
-    .replace(/var\s+__[A-Z_]+=[\s\S]{0,500}?;/g, "")
-    .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,500}?\)/g, "")
+    // Common minified JS patterns (Next.js, Webpack, Vite, Nuxt)
+    .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}/g, "")
+    .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}\)/g, "")
+    .replace(/var\s+__[A-Z_]+=[\s\S]{0,1000}?;/g, "")
+    .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,1000}?\)/g, "")
+    .replace(/self\.__next_f\.push[\s\S]{0,1000}?\)/g, "")
+    // Webpack/Vite chunk hashes: e.g. "static/chunks/abc123-def456.js"
+    .replace(/static\/chunks\/[\w\-\.]+\.js/g, "")
+    // Stray JSON blobs (e.g. {"prop":"value",...})
+    .replace(/\{(?:"[\w]+":\s*(?:"[^"]*"|[\d.]+|true|false|null|(?:\{[^}]*\}))\s*,?\s*){3,}\}/g, "")
+    // CSS-like property blocks: display:flex;justify-content:center;…
+    .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){3,}/gi, "")
+    // Base64 data URIs
+    .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, "")
+    // Long hex/hash strings (>20 chars) — likely asset hashes or tokens
+    .replace(/[0-9a-f]{20,}/gi, "")
+    // Escaped unicode sequences (e.g. \u003c, \x3c)
+    .replace(/(?:\\u[0-9a-f]{4}|\\x[0-9a-f]{2}){3,}/gi, "")
     // Collapse excessive whitespace
-    .replace(/\s{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  // Final pass: if a "paragraph" still looks like code (high density of {, }, ;, =, =>)
+  // remove it entirely
+  const lines = text.split("\n\n");
+  const cleaned = lines.filter((para) => {
+    const codeChars = (para.match(/[{};=()]/g) || []).length;
+    const ratio = codeChars / Math.max(para.length, 1);
+    // If >15% of characters are code syntax AND the paragraph is short-ish, drop it
+    return ratio < 0.15 || para.length > 500;
+  });
+  text = cleaned.join("\n\n");
+
+  return text;
 }
 
 interface Chunk {
@@ -99,72 +129,74 @@ function chunkText(text: string): Chunk[] {
 
 function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
   const [expanded, setExpanded] = useState(false);
-  const preview = chunk.text.slice(0, 280);
-  const isLong = chunk.text.length > 280;
+  const preview = chunk.text.slice(0, 320);
+  const isLong = chunk.text.length > 320;
 
   return (
     <div
-      className={`group relative flex flex-col rounded-xl border p-4 transition-all duration-200 ${
+      className={`group relative flex flex-col rounded-xl border transition-all duration-200 ${
         chunk.hasHeader
           ? "border-[#E5E5E3] bg-white hover:border-[#D5D5D5] hover:shadow-[0_4px_20px_rgba(0,0,0,0.04)]"
-          : "border-amber-200 bg-amber-50/60 hover:border-amber-300 hover:shadow-[0_4px_20px_rgba(245,158,11,0.08)]"
+          : "border-amber-200 bg-amber-50/40 hover:border-amber-300 hover:shadow-[0_4px_20px_rgba(245,158,11,0.06)]"
       }`}
     >
-      {/* Top row: chunk number + token badge + warning */}
-      <div className="mb-3 flex items-center justify-between gap-2">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-2 border-b border-[#F0F0EE] px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#F5F5F4] text-[10px] font-bold text-[#787774]">
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-[#EEEEED] text-[10px] font-bold tabular-nums text-[#787774]">
             {index + 1}
           </span>
-          <span className="rounded-md bg-[#F5F5F4] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#787774]">
-            ~{chunk.tokens} токенов
+          <span className="rounded-full bg-[#F5F5F4] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#999]">
+            ~{chunk.tokens.toLocaleString("ru-RU")} токенов
           </span>
         </div>
 
-        {!chunk.hasHeader && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-            <AlertTriangle className="h-3 w-3" />
+        {!chunk.hasHeader ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-600">
+            <AlertTriangle className="h-2.5 w-2.5" />
             Нет заголовка
           </span>
-        )}
-
-        {chunk.hasHeader && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
-            <Hash className="h-3 w-3" />
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-600">
+            <Hash className="h-2.5 w-2.5" />
             Заголовок
           </span>
         )}
       </div>
 
-      {/* Text preview — constrained height, scrollable when expanded */}
-      <div
-        className={`rounded-md bg-[#FAFAF9] p-3 text-[12px] leading-relaxed text-[#555] font-mono ${
-          expanded ? "max-h-64 overflow-y-auto" : "line-clamp-6"
-        }`}
-      >
-        <p className="whitespace-pre-wrap break-words m-0">
-          {expanded ? chunk.text : preview}
-          {!expanded && isLong && <span className="text-[#BBBBBB]">…</span>}
-        </p>
-      </div>
-
-      {/* Expand/collapse */}
-      {isLong && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="mt-2.5 inline-flex items-center gap-1 self-start text-[12px] font-medium text-[#787774] transition-colors hover:text-[#1a1a1a]"
+      {/* Text preview — constrained, scrollable, premium mono look */}
+      <div className="px-4 py-3">
+        <div
+          className={`rounded-lg bg-[#FAFAF9] border border-[#F0F0EE] p-3 text-[12px] leading-[1.7] text-[#666] font-mono ${
+            expanded
+              ? "max-h-60 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#D5D5D5]"
+              : "line-clamp-6"
+          }`}
         >
-          {expanded ? (
-            <>
-              <ChevronUp className="h-3.5 w-3.5" /> Свернуть
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-3.5 w-3.5" /> Показать полностью
-            </>
-          )}
-        </button>
-      )}
+          <p className="m-0 whitespace-pre-wrap break-words">
+            {expanded ? chunk.text : preview}
+            {!expanded && isLong && <span className="text-[#C5C5C5]"> …</span>}
+          </p>
+        </div>
+
+        {/* Expand/collapse toggle */}
+        {isLong && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[#999] transition-colors hover:text-[#555]"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-3 w-3" /> Свернуть
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3" /> Показать полностью
+              </>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

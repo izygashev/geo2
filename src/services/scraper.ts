@@ -420,12 +420,29 @@ export async function scrapeSite(url: string): Promise<SiteData> {
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
       const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-      const bodyTextMatch = html.replace(/<script[\s\S]*?<\/script>/gi, "")
+      const bodyTextMatch = html
+        // Strip ALL non-content elements (same set as Playwright path)
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
         .replace(/<style[\s\S]*?<\/style>/gi, "")
         .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
         .replace(/<svg[\s\S]*?<\/svg>/gi, "")
         .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+        .replace(/<canvas[\s\S]*?<\/canvas>/gi, "")
+        .replace(/<video[\s\S]*?<\/video>/gi, "")
+        .replace(/<audio[\s\S]*?<\/audio>/gi, "")
+        .replace(/<object[\s\S]*?<\/object>/gi, "")
+        .replace(/<embed[\s\S]*?<\/embed>/gi, "")
+        .replace(/<template[\s\S]*?<\/template>/gi, "")
+        .replace(/<link[^>]*>/gi, "")
+        // Strip remaining HTML tags
         .replace(/<[^>]+>/g, " ")
+        // Remove leaked JS artifacts: IIFE, var __NEXT, self.__next, JSON blobs, etc.
+        .replace(/!function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}/g, " ")
+        .replace(/\(function\s*\([^)]*\)\s*\{[\s\S]{0,2000}?\}\)/g, " ")
+        .replace(/var\s+__[A-Z_]+=[\s\S]{0,1000}?;/g, " ")
+        .replace(/\(self\.__next_f=self\.__next_f[\s\S]{0,1000}?\)/g, " ")
+        .replace(/\{"[\w]+":/g, " ")  // stray JSON objects
+        // Collapse whitespace
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 15000);
