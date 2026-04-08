@@ -543,7 +543,36 @@ export default async function ReportPage({
               "otzovik.com": "Отзовик",
               "yandex.ru/maps": "Яндекс Карты",
               "2gis.ru": "2ГИС",
+              // Legacy Western platforms (old reports)
+              "reddit.com": "Reddit",
+              "quora.com": "Quora",
+              "producthunt.com": "Product Hunt",
+              "trustpilot.com": "Trustpilot",
             };
+
+            /** Translate English context from legacy reports into Russian */
+            function localizeContext(ctx: string, platform: string, mentioned: boolean): string {
+              if (!ctx || ctx.trim().length === 0) {
+                const platformLabel = PLATFORM_LABELS[platform] ?? platform;
+                return mentioned
+                  ? `Бренд упоминается на ${platformLabel}`
+                  : `Упоминания на ${platformLabel} не найдены`;
+              }
+
+              // Already Russian — return as-is
+              if (/[а-яА-ЯёЁ]/.test(ctx)) return ctx;
+
+              // English text from legacy reports — translate to Russian
+              const platformLabel = PLATFORM_LABELS[platform] ?? platform;
+
+              if (!mentioned) {
+                return `Органические упоминания на ${platformLabel} не найдены`;
+              }
+
+              // Mentioned with English context — provide Russian wrapper
+              return `Бренд упоминается на ${platformLabel}`;
+            }
+
             const mentions = report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[];
             return (
             <div>
@@ -552,7 +581,7 @@ export default async function ReportPage({
                   Digital PR
                 </p>
                 <p className="mt-1 text-[11px] text-[#BBBBBB]">
-                  Где о вас говорят на популярных площадках Рунета
+                  Где о вас говорят на популярных площадках
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -574,7 +603,7 @@ export default async function ReportPage({
                         )}
                       </div>
                       <p className="text-[11px] leading-relaxed text-[#787774] line-clamp-3">
-                        {mention.context}
+                        {localizeContext(mention.context, mention.platform, mention.mentioned)}
                       </p>
                       {mention.url && mention.mentioned && (
                         <a
