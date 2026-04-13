@@ -31,6 +31,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Пропускаем блог и llms.txt (публичные для SEO)
+  if (pathname.startsWith("/blog") || pathname.startsWith("/llms.txt")) {
+    return NextResponse.next();
+  }
+
   // Пропускаем публичные отчёты /r/[shareId]
   if (pathname.startsWith("/r/")) {
     return NextResponse.next();

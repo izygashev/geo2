@@ -27,6 +27,7 @@ enum ReportStatus {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
   CANCELLED
   EXPIRED

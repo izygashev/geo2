@@ -3,19 +3,19 @@ import { Globe } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="border-t border-[#EAEAEA] bg-[#F7F6F3]">
-      <div className="mx-auto max-w-5xl px-6 py-12 lg:py-16">
+    <footer className="border-t border-neutral-100 bg-white">
+      <div className="mx-auto max-w-5xl px-6 py-14 lg:px-8 lg:py-20">
         {/* Top row */}
-        <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
           {/* Brand */}
           <div className="max-w-xs">
-            <div className="mb-3 flex items-center gap-2">
-              <Globe className="h-4 w-4 text-[#787774]" />
-              <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">
+            <div className="mb-4 flex items-center gap-2.5">
+              <Globe className="h-4 w-4 text-[#999]" strokeWidth={1.5} />
+              <span className="text-[14px] font-semibold tracking-[-0.02em] text-[#0A0A0A]">
                 Geo Studio
               </span>
             </div>
-            <p className="text-xs leading-relaxed text-[#787774]">
+            <p className="text-[12px] leading-[1.7] text-[#999]">
               Платформа аналитики AI-видимости бренда.
               <br />
               Анализируем упоминания в ChatGPT, Perplexity и Claude.
@@ -23,16 +23,16 @@ export function Footer() {
           </div>
 
           {/* Links */}
-          <div className="flex gap-12">
+          <div className="flex gap-14">
             <div>
-              <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.15em] text-[#BBBBBB]">
+              <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#CCC]">
                 Продукт
               </p>
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 <li>
                   <Link
                     href="/sign-up"
-                    className="text-xs text-[#787774] transition-colors hover:text-[#1a1a1a]"
+                    className="text-[12px] text-[#888] transition-colors duration-200 hover:text-[#0A0A0A]"
                   >
                     Начать бесплатно
                   </Link>
@@ -40,23 +40,31 @@ export function Footer() {
                 <li>
                   <Link
                     href="/sign-in"
-                    className="text-xs text-[#787774] transition-colors hover:text-[#1a1a1a]"
+                    className="text-[12px] text-[#888] transition-colors duration-200 hover:text-[#0A0A0A]"
                   >
                     Войти
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/blog"
+                    className="text-[12px] text-[#888] transition-colors duration-200 hover:text-[#0A0A0A]"
+                  >
+                    Блог
                   </Link>
                 </li>
               </ul>
             </div>
 
             <div>
-              <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.15em] text-[#BBBBBB]">
+              <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#CCC]">
                 Документы
               </p>
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 <li>
                   <Link
                     href="/privacy"
-                    className="text-xs text-[#787774] transition-colors hover:text-[#1a1a1a]"
+                    className="text-[12px] text-[#888] transition-colors duration-200 hover:text-[#0A0A0A]"
                   >
                     Политика конфиденциальности
                   </Link>
@@ -64,7 +72,7 @@ export function Footer() {
                 <li>
                   <Link
                     href="/offer"
-                    className="text-xs text-[#787774] transition-colors hover:text-[#1a1a1a]"
+                    className="text-[12px] text-[#888] transition-colors duration-200 hover:text-[#0A0A0A]"
                   >
                     Оферта
                   </Link>
@@ -75,21 +83,21 @@ export function Footer() {
         </div>
 
         {/* Divider */}
-        <div className="my-8 border-t border-[#EAEAEA]" />
+        <div className="my-10 border-t border-neutral-100" />
 
         {/* Bottom row — реквизиты */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <p className="text-[11px] leading-relaxed text-[#BBBBBB]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <p className="text-[11px] leading-relaxed text-[#CCC]">
             НПД Изыгашев Георгий Олегович • ИНН 425201762001
           </p>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             <a
-              href="mailto:hello@geosaas.com"
-              className="text-[11px] text-[#BBBBBB] transition-colors hover:text-[#787774]"
+              href="mailto:hello@geostudioai.ru"
+              className="text-[11px] text-[#CCC] transition-colors duration-200 hover:text-[#888]"
             >
-              hello@geosaas.com
+              hello@geostudioai.ru
             </a>
-            <p className="text-[11px] text-[#BBBBBB]">
+            <p className="text-[11px] text-[#CCC]">
               © {new Date().getFullYear()} Geo Studio
             </p>
           </div>

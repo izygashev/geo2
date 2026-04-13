@@ -9,9 +9,15 @@
  * наличие /llms.txt, Schema.org (JSON-LD) данные.
  */
 
-import { chromium, type Browser } from "playwright";
+import { chromium } from "playwright-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { type Browser } from "playwright";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
+
+// Apply stealth plugin — patches dozens of headless-detection vectors
+// (navigator.webdriver, chrome.runtime, WebGL vendor, etc.)
+chromium.use(StealthPlugin());
 
 // ─── Universal content extraction via Readability ───────
 /**
@@ -22,9 +28,16 @@ import { JSDOM } from "jsdom";
  * Falls back to aggressive DOM cleanup if Readability fails to parse.
  */
 function extractReadableText(html: string, pageUrl: string): string {
+  // 0. Pre-strip <style> and <script> from raw HTML to prevent CSS/JS leaking
+  //    into textContent (Tilda, Wix, Bitrix often inline massive style blocks).
+  const cleanHtml = html
+    .replace(/<style[\s>][\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s>][\s\S]*?<\/script>/gi, "")
+    .replace(/<noscript[\s>][\s\S]*?<\/noscript>/gi, "");
+
   // 1. Try Readability (industry standard)
   try {
-    const doc = new JSDOM(html, { url: pageUrl });
+    const doc = new JSDOM(cleanHtml, { url: pageUrl });
     const reader = new Readability(doc.window.document, {
       charThreshold: 50,       // lower threshold → more content extracted
       nbTopCandidates: 10,     // consider more candidates for article body
@@ -48,7 +61,7 @@ function extractReadableText(html: string, pageUrl: string): string {
   // 2. Fallback: aggressive DOM cleanup via JSDOM
   console.log("[Scraper] 🔄 Readability insufficient, falling back to DOM cleanup...");
   try {
-    const doc = new JSDOM(html, { url: pageUrl });
+    const doc = new JSDOM(cleanHtml, { url: pageUrl });
     const document = doc.window.document;
 
     // Remove ALL non-content elements
@@ -96,23 +109,18 @@ function extractReadableText(html: string, pageUrl: string): string {
       const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
       if (!txt || txt.length < 3) continue;
       if (seen.has(txt)) continue;
-      // Code density check
-      const codeChars = (txt.match(/[{};=()]/g) || []).length;
-      if (txt.length > 5 && codeChars / txt.length > 0.10) continue;
       seen.add(txt);
       fragments.push(txt);
     }
 
-    // If content elements yielded too little, try divs/spans
+    // If content elements yielded too little, try leaf divs/spans
     if (fragments.join(" ").length < 300) {
       const fallbackEls = scope.querySelectorAll("div, span");
       for (const el of fallbackEls) {
-        if (el.children.length > 3) continue;
+        if (el.children.length > 3) continue; // skip wrapper divs
         const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
         if (!txt || txt.length < 5 || txt.length > 2000) continue;
         if (seen.has(txt)) continue;
-        const codeChars = (txt.match(/[{};=()]/g) || []).length;
-        if (txt.length > 5 && codeChars / txt.length > 0.08) continue;
         seen.add(txt);
         fragments.push(txt);
       }
@@ -248,13 +256,24 @@ export async function scrapeSite(url: string): Promise<SiteData> {
   try {
     browser = await chromium.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--ignore-certificate-errors",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-features=IsolateOrigins,site-per-process",
+        "--disable-infobars",
+        "--window-size=1280,720",
+      ],
     });
 
     const context = await browser.newContext({
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       viewport: { width: 1280, height: 720 },
+      locale: "en-US",
+      timezoneId: "Europe/Moscow",
+      bypassCSP: true,
     });
 
     const page = await context.newPage();

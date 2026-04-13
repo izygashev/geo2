@@ -72,27 +72,27 @@ export function FaqAccordion() {
       {FAQ_ITEMS.map((item, i) => {
         const isOpen = openIndex === i;
         return (
-          <div key={i} className="border-b border-[#EAEAEA]">
+          <div key={i} className="border-b border-neutral-100">
             <button
               onClick={() => setOpenIndex(isOpen ? null : i)}
-              className="flex w-full items-center justify-between py-5 text-left"
+              className="flex w-full items-center justify-between py-6 text-left"
             >
-              <span className="text-sm font-medium text-[#1a1a1a] pr-4">
+              <span className="text-[14px] font-medium tracking-[-0.01em] text-[#0A0A0A] pr-4">
                 {item.question}
               </span>
               {isOpen ? (
-                <Minus className="h-4 w-4 shrink-0 text-[#787774]" strokeWidth={1.5} />
+                <Minus className="h-4 w-4 shrink-0 text-[#999]" strokeWidth={1.5} />
               ) : (
-                <Plus className="h-4 w-4 shrink-0 text-[#BBBBBB]" strokeWidth={1.5} />
+                <Plus className="h-4 w-4 shrink-0 text-[#CCC]" strokeWidth={1.5} />
               )}
             </button>
             <div
               className={`grid transition-all duration-300 ease-in-out ${
-                isOpen ? "grid-rows-[1fr] pb-5" : "grid-rows-[0fr]"
+                isOpen ? "grid-rows-[1fr] pb-6" : "grid-rows-[0fr]"
               }`}
             >
               <div className="overflow-hidden">
-                <div className="text-sm leading-relaxed text-[#787774]">
+                <div className="text-[13px] leading-[1.7] text-[#888]">
                   {item.answer}
                 </div>
               </div>

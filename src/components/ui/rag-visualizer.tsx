@@ -33,58 +33,27 @@ function startsWithHeader(text: string): boolean {
 
 /**
  * Lightweight safety net for residual artifacts in scrapedBody.
- * The backend now uses @mozilla/readability for clean extraction,
- * but old reports stored before this fix may still contain code.
- * This is intentionally simple — the heavy lifting is server-side.
+ * The backend now uses @mozilla/readability with pre-stripped <style>/<script>,
+ * but old reports stored before this fix may still contain CSS/JS code.
  */
 function sanitizeText(raw: string): string {
-  let text = raw
+  return raw
     // Strip any leftover HTML tags
     .replace(/<[^>]+>/g, " ")
-    // Remove stray curly brace blocks (CSS/JS)
-    .replace(/\{[^}]{0,500}\}/g, " ")
+    // Remove entire CSS blocks: @keyframes ..., @media ..., .class { ... }
+    .replace(/@[\w-]+\s*[\s\S]*?\{[\s\S]*?\}\s*\}?/g, " ")
+    // Remove stray CSS rule blocks: .foo { ... }
+    .replace(/[.#][\w-]+\s*\{[^}]*\}/g, " ")
     // Remove CSS property chains: "display:flex;margin:0;..."
-    .replace(/(?:[a-z-]+\s*:\s*[^;]{1,40};\s*){2,}/gi, "")
+    .replace(/(?:[a-z-]+\s*:\s*[^;]{1,60};\s*){2,}/gi, " ")
     // Remove base64 data URIs
-    .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, "")
+    .replace(/data:[a-z]+\/[a-z+.-]+;base64,[A-Za-z0-9+/=]{20,}/g, " ")
     // Remove long hex hashes (asset hashes, tokens)
-    .replace(/[0-9a-f]{20,}/gi, "")
+    .replace(/[0-9a-f]{20,}/gi, " ")
     // Collapse whitespace
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-
-  // Line-level filter — drop lines that are clearly code
-  text = text
-    .split("\n")
-    .filter((line) => {
-      const t = line.trim();
-      if (!t) return true; // keep blank lines
-      if (t.includes("{") || t.includes("}")) return false;
-      if (/^@(?:keyframes|media|import|font-face|charset|supports)\b/.test(t)) return false;
-      if (/^(?:var|let|const|function|return|if|else|for|while|switch)\b/.test(t)) return false;
-      // Drop lines with >25% symbols
-      const symbolChars = (t.match(/[{};:=()[\]<>]/g) || []).length;
-      if (t.length > 5 && symbolChars / t.length > 0.25) return false;
-      return true;
-    })
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-  // Paragraph-level filter — drop code-like paragraphs
-  const paragraphs = text.split("\n\n");
-  const cleaned = paragraphs.filter((para) => {
-    const trimmed = para.trim();
-    if (!trimmed || trimmed.length < 3) return false;
-    const codeChars = (trimmed.match(/[{};=()]/g) || []).length;
-    if (trimmed.length > 5 && codeChars / trimmed.length > 0.12 && trimmed.length < 600) return false;
-    if (/\w+\.\w+\([^)]*\)\.\w+\(/.test(trimmed)) return false;
-    return true;
-  });
-  text = cleaned.join("\n\n");
-
-  return text;
 }
 
 interface Chunk {
@@ -132,40 +101,32 @@ function chunkText(text: string): Chunk[] {
   return chunks;
 }
 
-/* ── Chunk Card — "AI Vision" terminal aesthetic ── */
+/* ── Chunk Card — Quiet Luxury sans-serif design ── */
 
-function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
+function ChunkCard({ chunk }: { chunk: Chunk }) {
   const [expanded, setExpanded] = useState(false);
   const preview = chunk.text.slice(0, 280);
   const isLong = chunk.text.length > 280;
 
   return (
     <div className="group relative flex flex-col rounded-xl border border-[#E5E5E3] bg-white transition-all duration-200 hover:border-[#D5D5D5] hover:shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-      {/* Terminal-style header bar */}
-      <div className="flex items-center justify-between gap-2 rounded-t-xl bg-[#1a1a1a] px-4 py-2">
+      {/* Header bar */}
+      <div className="flex items-center justify-between gap-2 rounded-t-xl border-b border-[#EAEAEA] bg-[#FAFAF9] px-4 py-2.5">
         <div className="flex items-center gap-2">
-          {/* Fake terminal dots */}
-          <div className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-[#B02A37]/80" />
-            <span className="h-2 w-2 rounded-full bg-[#B08D19]/80" />
-            <span className="h-2 w-2 rounded-full bg-[#2D6A4F]/80" />
-          </div>
-          <span className="ml-1 text-[11px] font-medium text-white/50">
-            Блок {index + 1}
+          <Layers className="h-3.5 w-3.5 text-[#BBBBBB]" />
+          <span className="text-[12px] font-semibold text-[#787774]">
+            Прочитанный фрагмент
           </span>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] tabular-nums text-white/40">
-            ~{chunk.tokens.toLocaleString("ru-RU")} токенов
-          </span>
           {!chunk.hasHeader ? (
-            <span className="inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
               <AlertTriangle className="h-2.5 w-2.5" />
               Без заголовка
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
               <Hash className="h-2.5 w-2.5" />
               Заголовок
             </span>
@@ -181,13 +142,13 @@ function ChunkCard({ chunk, index }: { chunk: Chunk; index: number }) {
         </span>
       </div>
 
-      {/* Text content — raw data aesthetic */}
+      {/* Text content — clean sans-serif */}
       <div className="px-4 py-3">
         <div
-          className={`rounded-lg bg-[#FAFAF9] border border-[#EEEEED] p-3.5 font-mono text-[13px] leading-[1.7] text-[#444] ${
+          className={`max-h-48 rounded-lg border border-[#EEEEED] bg-[#FAFAF9] p-3.5 text-[13px] leading-[1.75] text-[#555] ${
             expanded
-              ? "max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#D5D5D5]"
-              : "max-h-48 overflow-hidden"
+              ? "overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#D5D5D5]"
+              : "overflow-hidden"
           }`}
         >
           <p className="m-0 whitespace-pre-wrap break-words">
@@ -226,14 +187,15 @@ interface RagVisualizerProps {
 export function RagVisualizer({ text }: RagVisualizerProps) {
   const clean = sanitizeText(text);
   const chunks = chunkText(clean);
-  const totalTokens = estimateTokens(clean);
   const warningCount = chunks.filter((c) => !c.hasHeader).length;
 
   if (chunks.length === 0) {
     return (
       <div className="rounded-xl border border-[#EAEAEA] bg-[#FAFAF9] p-8 text-center">
         <Layers className="mx-auto mb-3 h-8 w-8 text-[#D5D5D5]" />
-        <p className="text-sm text-[#787774]">Нет текста для анализа чанков.</p>
+        <p className="mx-auto max-w-md text-sm leading-relaxed text-[#787774]">
+          {"Текст не\u00A0найден. Нейросеть видит пустую страницу. Это часто бывает, если сайт полностью сделан на\u00A0картинках или скриптах без\u00A0правильной HTML-разметки."}
+        </p>
       </div>
     );
   }
@@ -251,16 +213,13 @@ export function RagVisualizer({ text }: RagVisualizerProps) {
               Как нейросети читают ваш сайт
             </h3>
             <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-[#BBBBBB]">
-              RAG-анализ
+              Анализ структуры
             </p>
           </div>
         </div>
 
         <p className="text-[13.5px] leading-[1.75] text-[#555]">
-          LLM-модели (ChatGPT, Claude, Яндекс.Нейро) не&nbsp;видят ваш красивый дизайн.
-          Они сканируют сайт и&nbsp;разрезают его на&nbsp;смысловые текстовые блоки
-          (чанки). Если ИИ видит здесь сплошной код или текст без заголовков&nbsp;—
-          он&nbsp;не&nbsp;сможет понять, чем занимается ваш бизнес, и&nbsp;порекомендует конкурентов.
+          {"Искусственный интеллект не\u00A0видит ваш красивый дизайн. Он\u00A0читает сайт как набор текстовых карточек. Если вместо понятного текста с\u00A0заголовками ИИ видит программный код или кашу из\u00A0слов\u00A0\u2014 он\u00A0не\u00A0поймет ваш бизнес и\u00A0посоветует клиентам ваших конкурентов."}
         </p>
 
         {/* Value proposition callout */}
@@ -270,8 +229,7 @@ export function RagVisualizer({ text }: RagVisualizerProps) {
             Ценность
           </AlertTitle>
           <AlertDescription className="text-[13px] leading-relaxed text-[#2D6A4F]/80">
-            Чистая структура чанков = попадание в&nbsp;ответы нейросетей и&nbsp;бесплатные лиды.
-            Мы&nbsp;оптимизируем контент так, чтобы ИИ мог точно процитировать ваш бизнес.
+            {"Понятный текст для ИИ = попадание в\u00A0ответы нейросетей = бесплатные клиенты."}
           </AlertDescription>
         </Alert>
       </div>
@@ -286,11 +244,7 @@ export function RagVisualizer({ text }: RagVisualizerProps) {
         <div className="h-4 w-px bg-[#EAEAEA]" />
 
         <span className="rounded-md bg-[#F5F5F4] px-2.5 py-1 text-xs font-medium tabular-nums text-[#555]">
-          {chunks.length} {chunks.length === 1 ? "блок" : chunks.length < 5 ? "блока" : "блоков"}
-        </span>
-
-        <span className="rounded-md bg-[#F5F5F4] px-2.5 py-1 text-xs font-medium tabular-nums text-[#555]">
-          ~{totalTokens.toLocaleString("ru-RU")} токенов
+          {chunks.length} {chunks.length === 1 ? "фрагмент" : chunks.length < 5 ? "фрагмента" : "фрагментов"}
         </span>
 
         {warningCount > 0 && (
@@ -309,20 +263,20 @@ export function RagVisualizer({ text }: RagVisualizerProps) {
         <Alert className="border-amber-200 bg-amber-50/50">
           <Info className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-[13px] font-semibold text-amber-800">
-            Проблема: блоки без заголовков
+            Проблема: нет заголовков
           </AlertTitle>
           <AlertDescription className="text-[13px] leading-relaxed text-amber-700">
-            {warningCount} из {chunks.length} блоков не&nbsp;содержат заголовка.
-            Когда нейросеть выбирает, какой фрагмент процитировать, блоки без&nbsp;H2/H3
-            теряют контекст и&nbsp;уступают конкурентам с&nbsp;чётко размеченным контентом.
+            {warningCount} из {chunks.length} фрагментов не{"\u00A0"}содержат заголовка.
+            Нейросеть не{"\u00A0"}может понять, к{"\u00A0"}какому разделу относится этот текст,
+            и{"\u00A0"}пропускает его в{"\u00A0"}пользу конкурентов с{"\u00A0"}понятной структурой.
           </AlertDescription>
         </Alert>
       )}
 
       {/* ── Chunk grid ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {chunks.map((chunk, i) => (
-          <ChunkCard key={chunk.id} chunk={chunk} index={i} />
+        {chunks.map((chunk) => (
+          <ChunkCard key={chunk.id} chunk={chunk} />
         ))}
       </div>
     </div>

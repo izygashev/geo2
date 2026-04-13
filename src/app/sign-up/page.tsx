@@ -135,6 +135,18 @@ export default function SignUpPage() {
               )}
             </Button>
 
+            <p className="text-center text-xs leading-relaxed text-[#787774]">
+              Регистрируясь, вы&nbsp;принимаете условия{" "}
+              <Link href="/offer" className="text-[#1a1a1a] underline underline-offset-2 hover:text-[#333]">
+                Публичной оферты
+              </Link>{" "}
+              и&nbsp;даёте согласие на&nbsp;обработку персональных данных
+              в&nbsp;соответствии с{" "}
+              <Link href="/privacy" className="text-[#1a1a1a] underline underline-offset-2 hover:text-[#333]">
+                Политикой конфиденциальности
+              </Link>.
+            </p>
+
             <p className="text-center text-sm text-[#787774]">
               Уже есть аккаунт?{" "}
               <Link href="/sign-in" className="font-medium text-[#1a1a1a] hover:underline">

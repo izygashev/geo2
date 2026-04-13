@@ -128,13 +128,21 @@ async function main() {
       continue;
     }
 
-    // ── Создаём отчёт ──
-    const report = await prisma.report.create({
-      data: {
-        projectId: project.id,
-        status: "PROCESSING",
-      },
-    });
+    // ── Создаём отчёт + списываем кредиты (оптимистично, как в API) ──
+    const reportCost = limits.reportCost;
+
+    const [report] = await prisma.$transaction([
+      prisma.report.create({
+        data: {
+          projectId: project.id,
+          status: "PROCESSING",
+        },
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { credits: { decrement: reportCost } },
+      }),
+    ]);
 
     // ── Добавляем задачу в BullMQ ──
     await reportQueue.add(
@@ -145,8 +153,13 @@ async function main() {
         projectUrl: project.url,
         userId: user.id,
         multiLlm: limits.multiLlm,
+        reportCost,
       },
-      { jobId: report.id },
+      {
+        jobId: report.id,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 10_000 },
+      },
     );
 
     // ── Сдвигаем scheduleNextRun ──

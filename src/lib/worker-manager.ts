@@ -41,6 +41,8 @@ export function ensureWorkerRunning(): void {
     {
       connection: redisConnection,
       concurrency: 1, // Один отчёт за раз (Playwright + API лимиты)
+      lockDuration: 600_000,    // 10 min — reports take 2-5 min, must not expire mid-job
+      stalledInterval: 120_000, // Check for stalled jobs every 2 min
     }
   );
 

@@ -3,12 +3,25 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { yookassa, PLANS, type PlanKey } from "@/services/yookassa";
 import { v4 as uuidv4 } from "uuid";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+// Rate limit: 3 subscription attempts per 10 minutes
+const SUBSCRIBE_RATE_LIMIT = { maxRequests: 3, windowSeconds: 600 };
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit payment creation
+    const rl = checkRateLimit(`subscribe:${session.user.id}`, SUBSCRIBE_RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Слишком много попыток. Подождите 10 минут." },
+        { status: 429 }
+      );
     }
 
     const body = (await req.json()) as { plan?: string };
@@ -23,17 +36,17 @@ export async function POST(req: NextRequest) {
 
     const planConfig = PLANS[planKey];
 
-    // Проверяем, нет ли уже активной подписки
+    // Проверяем, нет ли уже активной или ожидающей оплаты подписки
     const existingSubscription = await prisma.subscription.findFirst({
       where: {
         userId: session.user.id,
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "PENDING", "PAST_DUE"] },
       },
     });
 
     if (existingSubscription) {
       return NextResponse.json(
-        { error: "У вас уже есть активная подписка. Отмените её перед оформлением новой." },
+        { error: "У вас уже есть активная или ожидающая оплаты подписка. Отмените её перед оформлением новой." },
         { status: 409 }
       );
     }
@@ -42,12 +55,12 @@ export async function POST(req: NextRequest) {
     const periodEnd = new Date();
     periodEnd.setDate(periodEnd.getDate() + 30);
 
-    // Создаём подписку в БД со статусом ACTIVE (активируется после оплаты)
+    // Создаём подписку в БД со статусом PENDING (активируется ТОЛЬКО через webhook после payment.succeeded)
     const subscription = await prisma.subscription.create({
       data: {
         userId: session.user.id,
         plan: planConfig.plan,
-        status: "ACTIVE",
+        status: "PENDING",
         creditsPerMonth: planConfig.credits,
         priceKopecks: planConfig.priceKopecks,
         currentPeriodEnd: periodEnd,

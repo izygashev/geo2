@@ -356,6 +356,67 @@ async function callWithFallback(
   throw new Error("Все модели недоступны (платные — 402, бесплатные — ошибка)");
 }
 
+// ─── Resilient LLM Wrapper ──────────────────────────────
+// Retry-aware wrapper that:
+// 1. Calls the LLM via callWithFallback
+// 2. Strips markdown fences and extracts raw JSON
+// 3. Repairs truncated JSON (unclosed braces/brackets)
+// 4. Validates the result against a Zod schema
+// 5. Retries up to MAX_RETRIES times on transient failures or schema violations
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 3_000;
+
+async function callLlmWithRetry<T>(
+  messages: { role: "system" | "user"; content: string }[],
+  maxTokens: number,
+  schema: z.ZodType<T>,
+  primaryModel?: string,
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const rawText = await callWithFallback(messages, maxTokens, primaryModel);
+
+      // Extract JSON from markdown fences / raw text
+      const jsonStr = extractJson(rawText);
+
+      // Repair truncated JSON (unclosed braces, brackets, strings)
+      let jsonFixed = jsonStr;
+      try {
+        JSON.parse(jsonFixed);
+      } catch {
+        jsonFixed = repairJson(jsonFixed);
+      }
+
+      // Strict Zod validation — if the LLM hallucinated wrong structure, throw and retry
+      const parsed = schema.parse(JSON.parse(jsonFixed));
+      return parsed;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      const isLastAttempt = attempt === MAX_RETRIES;
+      const isZodError = err instanceof z.ZodError;
+      const isSyntaxError = err instanceof SyntaxError;
+
+      console.warn(
+        `[LLM] ⚠️ Attempt ${attempt}/${MAX_RETRIES} failed` +
+          `${isZodError ? " (Zod validation)" : isSyntaxError ? " (JSON parse)" : " (network/API)"}` +
+          `: ${lastError.message.slice(0, 200)}`
+      );
+
+      if (isLastAttempt) break;
+
+      // Wait before retrying (linear backoff: 3s, 6s)
+      const delay = RETRY_DELAY_MS * attempt;
+      console.log(`[LLM] ⏳ Retrying in ${delay / 1000}s...`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+
+  throw lastError ?? new Error("callLlmWithRetry: all attempts exhausted");
+}
+
 // ═══════════════════════════════════════════════════════════
 // 1. Генерация ключевых запросов
 // ═══════════════════════════════════════════════════════════
@@ -365,7 +426,7 @@ export async function generateKeywords(siteData: SiteData): Promise<KeywordItem[
   const currentYear = new Date().getFullYear();
 
   try {
-    const rawText = await callWithFallback(
+    const parsed = await callLlmWithRetry(
       [
         {
           role: "system",
@@ -398,11 +459,9 @@ Generate exactly 5 diverse queries: mix of informational, commercial, and naviga
         },
       ],
       1000,
+      KeywordsSchema,
       CLAUDE_MODEL
     );
-
-    const jsonStr = extractJson(rawText);
-    const parsed = KeywordsSchema.parse(JSON.parse(jsonStr));
 
     console.log(`[LLM] ✅ Сгенерировано ${parsed.keywords.length} ключевых запросов`);
     return parsed.keywords;
@@ -432,7 +491,7 @@ export async function checkShareOfVoice(
   const domain = new URL(siteUrl).hostname.replace("www.", "");
 
   try {
-    const rawText = await callWithFallback(
+    const parsed = await callLlmWithRetry(
       [
         {
           role: "system",
@@ -469,53 +528,32 @@ CRITICAL RULES:
         },
       ],
       1500,
+      SovResultSchema,
       SONAR_MODEL
     );
 
-    const jsonStr = extractJson(rawText);
+    // Programmatic verification — не доверяем LLM self-reporting
+    const lowerDomain = domain.toLowerCase();
+    const actuallyMentioned = parsed.competitors.some(
+      (c) =>
+        c.name.toLowerCase().includes(lowerDomain) ||
+        (c.url && c.url.toLowerCase().includes(lowerDomain))
+    );
 
-    try {
-      const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
+    const isMentioned = actuallyMentioned || parsed.isMentioned;
 
-      // Programmatic verification — не доверяем LLM self-reporting
-      const lowerDomain = domain.toLowerCase();
-      const actuallyMentioned = parsed.competitors.some(
-        (c) =>
-          c.name.toLowerCase().includes(lowerDomain) ||
-          (c.url && c.url.toLowerCase().includes(lowerDomain))
-      );
-
-      const isMentioned = actuallyMentioned || parsed.isMentioned;
-
-      console.log(
-        `[LLM] ${isMentioned ? "✅" : "❌"} "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${isMentioned}${actuallyMentioned !== parsed.isMentioned ? ` (corrected from ${parsed.isMentioned})` : ""}, competitors: ${parsed.competitors.length}${parsed.sentiment ? `, sentiment: ${parsed.sentiment}` : ""}`
-      );
-      return {
-        keyword,
-        llmProvider: "perplexity-sonar",
-        isMentioned,
-        mentionContext: parsed.mentionContext ?? "",
-        sentiment: parsed.sentiment ?? undefined,
-        categorySearched: parsed.categorySearched,
-        competitors: parsed.competitors,
-      };
-    } catch {
-      // Если JSON не парсится, пробуем определить по тексту
-      const lowerText = rawText.toLowerCase();
-      const lowerDomain = domain.toLowerCase();
-      const isMentioned = lowerText.includes(lowerDomain);
-
-      console.log(
-        `[LLM] ⚠️ JSON не парсится, fallback текстовый анализ: mentioned=${isMentioned}`
-      );
-      return {
-        keyword,
-        llmProvider: "perplexity-sonar",
-        isMentioned,
-        mentionContext: isMentioned ? rawText.slice(0, 200) : "",
-        competitors: [],
-      };
-    }
+    console.log(
+      `[LLM] ${isMentioned ? "✅" : "❌"} "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${isMentioned}${actuallyMentioned !== parsed.isMentioned ? ` (corrected from ${parsed.isMentioned})` : ""}, competitors: ${parsed.competitors.length}${parsed.sentiment ? `, sentiment: ${parsed.sentiment}` : ""}`
+    );
+    return {
+      keyword,
+      llmProvider: "perplexity-sonar",
+      isMentioned,
+      mentionContext: parsed.mentionContext ?? "",
+      sentiment: parsed.sentiment ?? undefined,
+      categorySearched: parsed.categorySearched,
+      competitors: parsed.competitors,
+    };
   } catch (error) {
     console.error(`[LLM] ❌ Ошибка SoV для "${keyword}":`, error);
     return {
@@ -542,7 +580,7 @@ export async function checkShareOfVoiceMultiLlm(
 
   for (const model of MULTI_LLM_MODELS) {
     try {
-      const rawText = await callWithFallback(
+      const parsed = await callLlmWithRetry(
         [
           {
             role: "system",
@@ -577,47 +615,32 @@ CRITICAL RULES:
           },
         ],
         1500,
+        SovResultSchema,
         model.id
       );
 
-      const jsonStr = extractJson(rawText);
+      // Programmatic verification — не доверяем LLM self-reporting
+      const lowerDomain = domain.toLowerCase();
+      const actuallyMentioned = parsed.competitors.some(
+        (c) =>
+          c.name.toLowerCase().includes(lowerDomain) ||
+          (c.url && c.url.toLowerCase().includes(lowerDomain))
+      );
 
-      try {
-        const parsed = SovResultSchema.parse(JSON.parse(jsonStr));
+      const isMentioned = actuallyMentioned || parsed.isMentioned;
 
-        // Programmatic verification — не доверяем LLM self-reporting
-        const lowerDomain = domain.toLowerCase();
-        const actuallyMentioned = parsed.competitors.some(
-          (c) =>
-            c.name.toLowerCase().includes(lowerDomain) ||
-            (c.url && c.url.toLowerCase().includes(lowerDomain))
-        );
-
-        const isMentioned = actuallyMentioned || parsed.isMentioned;
-
-        console.log(
-          `[LLM] ${isMentioned ? "✅" : "❌"} [${model.name}] "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${isMentioned}${actuallyMentioned !== parsed.isMentioned ? ` (corrected from ${parsed.isMentioned})` : ""}`
-        );
-        results.push({
-          keyword,
-          llmProvider: model.name.toLowerCase(),
-          isMentioned,
-          mentionContext: parsed.mentionContext ?? "",
-          sentiment: parsed.sentiment ?? undefined,
-          categorySearched: parsed.categorySearched,
-          competitors: parsed.competitors,
-        });
-      } catch {
-        const lowerText = rawText.toLowerCase();
-        const isMentioned = lowerText.includes(domain.toLowerCase());
-        results.push({
-          keyword,
-          llmProvider: model.name.toLowerCase(),
-          isMentioned,
-          mentionContext: isMentioned ? rawText.slice(0, 200) : "",
-          competitors: [],
-        });
-      }
+      console.log(
+        `[LLM] ${isMentioned ? "✅" : "❌"} [${model.name}] "${keyword}" → category: "${parsed.categorySearched}", mentioned: ${isMentioned}${actuallyMentioned !== parsed.isMentioned ? ` (corrected from ${parsed.isMentioned})` : ""}`
+      );
+      results.push({
+        keyword,
+        llmProvider: model.name.toLowerCase(),
+        isMentioned,
+        mentionContext: parsed.mentionContext ?? "",
+        sentiment: parsed.sentiment ?? undefined,
+        categorySearched: parsed.categorySearched,
+        competitors: parsed.competitors,
+      });
     } catch (error) {
       console.error(`[LLM] ❌ Ошибка Multi-LLM SoV [${model.name}] для "${keyword}":`, error);
       results.push({
@@ -729,23 +752,15 @@ ${!siteData.robotsTxtAiFriendly ? `IMPORTANT: robots.txt blocks AI bots (${siteD
 ${!siteData.semanticHtmlValid ? `IMPORTANT: Semantic HTML issues found (missing <main>/<article>, heading hierarchy problems). Include a recommendation about this.` : ""}
 The overallScore should be a weighted average of scoreBreakdown components.`;
 
-    const rawText = await callWithFallback(
+    const parsed = await callLlmWithRetry(
       [
         { role: "system", content: systemContent },
         { role: "user", content: userContent },
       ],
       2000,
+      RecommendationsSchema,
       CLAUDE_MODEL
     );
-
-    const jsonStr = extractJson(rawText);
-    let jsonFixed = jsonStr;
-    try {
-      JSON.parse(jsonFixed);
-    } catch {
-      jsonFixed = repairJson(jsonFixed);
-    }
-    const parsed = RecommendationsSchema.parse(JSON.parse(jsonFixed));
 
     console.log(
       `[LLM] ✅ Score: ${parsed.overallScore}, рекомендаций: ${parsed.recommendations.length}`
@@ -951,7 +966,7 @@ export async function checkDigitalPr(
   console.log(`[LLM] 📰 Digital PR проверка для "${brandName}" (${domain})`);
 
   try {
-    const rawText = await callWithFallback(
+    const parsed = await callLlmWithRetry(
       [
         {
           role: "system",
@@ -998,17 +1013,9 @@ Return exactly ${DIGITAL_PR_PLATFORMS.length} entries, one per platform: ${platf
         },
       ],
       2000,
+      DigitalPrSchema,
       SONAR_MODEL
     );
-
-    const jsonStr = extractJson(rawText);
-    let jsonFixed = jsonStr;
-    try {
-      JSON.parse(jsonFixed);
-    } catch {
-      jsonFixed = repairJson(jsonFixed);
-    }
-    const parsed = DigitalPrSchema.parse(JSON.parse(jsonFixed));
 
     const mentionedCount = parsed.mentions.filter((m) => m.mentioned).length;
     console.log(

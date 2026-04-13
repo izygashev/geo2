@@ -43,12 +43,14 @@ export default async function SharedReportPage({
 
   const competitors = new Map<string, number>();
   for (const sov of report.shareOfVoices) {
-    const comps = (sov.competitors as string[]) ?? [];
+    const comps = (sov.competitors as unknown[]) ?? [];
     for (const c of comps) {
-      // Filter out the target brand
-      const cLower = c.toLowerCase().trim();
+      // Handle both string and object formats: "name" or { name: "name", url?: "..." }
+      const name = typeof c === "string" ? c : (c && typeof c === "object" && "name" in c && typeof (c as Record<string, unknown>).name === "string") ? (c as { name: string }).name : null;
+      if (!name || !name.trim()) continue;
+      const cLower = name.toLowerCase().trim();
       if (cLower.includes(targetBrand) || targetBrand.includes(cLower.replace(/\s+/g, ""))) continue;
-      competitors.set(c, (competitors.get(c) ?? 0) + 1);
+      competitors.set(name, (competitors.get(name) ?? 0) + 1);
     }
   }
   const topCompetitors = [...competitors.entries()]

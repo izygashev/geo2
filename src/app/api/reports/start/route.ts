@@ -261,14 +261,22 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 5. Создаём Report со статусом PROCESSING
-    const report = await prisma.report.create({
-      data: {
-        projectId: project.id,
-        status: "PROCESSING",
-        fingerprintId: body.fingerprintId || null,
-      },
-    });
+    // 5. Создаём Report + оптимистично списываем кредиты (атомарно)
+    const reportCost = limits.reportCost;
+
+    const [report] = await prisma.$transaction([
+      prisma.report.create({
+        data: {
+          projectId: project.id,
+          status: "PROCESSING",
+          fingerprintId: body.fingerprintId || null,
+        },
+      }),
+      prisma.user.update({
+        where: { id: session.user.id },
+        data: { credits: { decrement: reportCost } },
+      }),
+    ]);
 
     // 6. Добавляем задачу в очередь BullMQ (воркер стартует автоматически)
     ensureWorkerRunning();
@@ -281,9 +289,12 @@ export async function POST(request: NextRequest) {
         projectUrl: project.url,
         userId: session.user.id,
         multiLlm: limits.multiLlm,
+        reportCost,
       },
       {
         jobId: report.id,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 10_000 }, // 10s, 20s, 40s
       }
     );
 

@@ -4,8 +4,46 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { getPlanLimits } from "@/lib/plan-limits";
 
+const DANGEROUS_PROTOCOLS = /^(javascript|data|vbscript|blob):/i;
+
 const BrandSchema = z.object({
-  brandLogoUrl: z.string().max(5000).nullable().optional(),
+  brandLogoUrl: z
+    .string()
+    .max(2048, "URL слишком длинный")
+    .refine(
+      (url) => !DANGEROUS_PROTOCOLS.test(url.trim()),
+      "Недопустимый протокол URL"
+    )
+    .refine(
+      (url) => {
+        try {
+          const parsed = new URL(url.trim());
+          // Only allow https (and http for dev/local environments)
+          if (!["https:", "http:"].includes(parsed.protocol)) return false;
+          // Block internal / loopback IPs to prevent SSRF
+          const hostname = parsed.hostname.toLowerCase();
+          if (
+            hostname === "localhost" ||
+            hostname === "127.0.0.1" ||
+            hostname === "[::1]" ||
+            hostname.startsWith("10.") ||
+            hostname.startsWith("172.") ||
+            hostname.startsWith("192.168.") ||
+            hostname === "0.0.0.0" ||
+            hostname.endsWith(".local") ||
+            hostname.endsWith(".internal")
+          ) {
+            return false;
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      "URL логотипа должен быть валидным https:// адресом"
+    )
+    .nullable()
+    .optional(),
   brandAccentColor: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, "Некорректный HEX-цвет")

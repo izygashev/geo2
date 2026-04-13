@@ -26,6 +26,7 @@ interface ReportJobData {
   projectUrl: string;
   userId: string;
   multiLlm?: boolean;
+  reportCost: number;
 }
 
 // ─── Progress helper ─────────────────────────────────────
@@ -54,7 +55,7 @@ function getPrisma(): PrismaClient {
 // ─── Основная функция обработки ──────────────────────────
 export async function processReport(job: Job<ReportJobData>): Promise<void> {
   const db = getPrisma();
-  const { reportId, projectId, projectUrl, userId, multiLlm } = job.data;
+  const { reportId, projectId, projectUrl, userId, multiLlm, reportCost } = job.data;
 
   console.log(`\n${"═".repeat(60)}`);
   console.log(`[Worker] 🚀 Начинаю обработку отчёта ${reportId}`);
@@ -168,7 +169,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     // ШАГ 6: Сохранение в БД (транзакция)
     // ═══════════════════════════════════════════════════════
     console.log(`[Worker] ── Сохранение в БД ──`);
-    const REPORT_COST = 10;
+    // Кредиты уже списаны оптимистично в /reports/start — здесь НЕ декрементируем.
 
     const existingReport = await db.report.findUnique({
       where: { id: reportId },
@@ -252,10 +253,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
         });
       }
 
-      await tx.user.update({
-        where: { id: userId },
-        data: { credits: { decrement: REPORT_COST } },
-      });
+      // Кредиты уже списаны оптимистично при постановке в очередь — здесь не трогаем.
     });
 
     await progress(job, { percent: 100, step: "Отчёт готов!" });
@@ -305,13 +303,22 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     );
 
     if (isFinalAttempt) {
+      // Refund: кредиты были списаны оптимистично при постановке в очередь.
+      // Раз отчёт окончательно провалился — возвращаем их пользователю.
       try {
-        await db.report.updateMany({
-          where: { id: reportId, status: "PROCESSING" },
-          data: { status: "FAILED" },
-        });
+        await db.$transaction([
+          db.report.updateMany({
+            where: { id: reportId, status: "PROCESSING" },
+            data: { status: "FAILED" },
+          }),
+          db.user.update({
+            where: { id: userId },
+            data: { credits: { increment: reportCost } },
+          }),
+        ]);
+        console.log(`[Worker] 💰 Refunded ${reportCost} credits to user ${userId}`);
       } catch (dbError) {
-        console.error(`[Worker] ❌ Не удалось обновить статус на FAILED:`, dbError);
+        console.error(`[Worker] ❌ Не удалось обновить статус на FAILED / refund credits:`, dbError);
       }
 
       try {

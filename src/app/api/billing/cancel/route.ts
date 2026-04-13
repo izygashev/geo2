@@ -23,7 +23,10 @@ export async function POST() {
       );
     }
 
-    // Отменяем подписку — она будет активна до конца оплаченного периода
+    // Отменяем подписку — пользователь сохраняет доступ до конца оплаченного периода.
+    // Plan НЕ сбрасывается сейчас: User.plan остаётся PRO/AGENCY до currentPeriodEnd.
+    // Даунгрейд до FREE произойдёт по cron-задаче, когда currentPeriodEnd наступит.
+    // Кредиты не забираем — пользователь может их использовать.
     await prisma.subscription.update({
       where: { id: subscription.id },
       data: {
@@ -32,14 +35,10 @@ export async function POST() {
       },
     });
 
-    // Сбрасываем план пользователя на FREE (в конце периода)
-    // Кредиты не забираем — пользователь может их использовать
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { plan: "FREE" },
+    return NextResponse.json({
+      success: true,
+      activeUntil: subscription.currentPeriodEnd,
     });
-
-    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[billing/cancel] Error:", error);
     return NextResponse.json(

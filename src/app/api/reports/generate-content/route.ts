@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import OpenAI from "openai";
+
+// Rate limit: 5 content generations per minute per user (burst protection)
+const GENERATE_RATE_LIMIT = { maxRequests: 5, windowSeconds: 60 };
+// Daily cap: 30 generations per day per user (cost protection)
+const GENERATE_DAILY_LIMIT = { maxRequests: 30, windowSeconds: 86400 };
+// IP fallback: 10 per minute (protects against token-farm attacks)
+const GENERATE_IP_LIMIT = { maxRequests: 10, windowSeconds: 60 };
 
 const CLAUDE_MODEL = "anthropic/claude-sonnet-4";
 
@@ -83,6 +91,34 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limit — burst (per user)
+  const rl = checkRateLimit(`gen-content:${session.user.id}`, GENERATE_RATE_LIMIT);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Слишком много запросов. Подождите минуту." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+    );
+  }
+
+  // Rate limit — daily cap (per user, cost protection)
+  const dailyRl = checkRateLimit(`gen-content-daily:${session.user.id}`, GENERATE_DAILY_LIMIT);
+  if (!dailyRl.allowed) {
+    return NextResponse.json(
+      { error: "Достигнут дневной лимит генераций (30). Попробуйте завтра." },
+      { status: 429 }
+    );
+  }
+
+  // Rate limit — IP layer (defense in depth against token farms)
+  const ip = getClientIp(req.headers);
+  const ipRl = checkRateLimit(`gen-content-ip:${ip}`, GENERATE_IP_LIMIT);
+  if (!ipRl.allowed) {
+    return NextResponse.json(
+      { error: "Слишком много запросов с этого IP. Подождите минуту." },
+      { status: 429 }
+    );
   }
 
   const body = await req.json();

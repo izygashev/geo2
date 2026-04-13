@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@plugin "@tailwindcss/typography";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -49,42 +51,41 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Premium Warm Monochrome — Utilitarian Minimalism
-   Warm off-white canvas, ultra-flat, editorial feel
-   taste-skill + minimalist-skill rules applied
+   Premium Quiet Luxury — Clean Minimalism
+   Pure white canvas, ultra-precise, high-tech editorial feel
    ═══════════════════════════════════════════════════════════ */
 :root {
-  --background: #F7F6F3;                       /* warm bone */
-  --foreground: #1a1a1a;                       /* off-black (never #000) */
+  --background: #FAFAFA;                       /* clean white */
+  --foreground: #0A0A0A;                       /* near-black */
   --card: #FFFFFF;
-  --card-foreground: #1a1a1a;
+  --card-foreground: #0A0A0A;
   --popover: #FFFFFF;
-  --popover-foreground: #1a1a1a;
-  --primary: #111111;                          /* charcoal */
+  --popover-foreground: #0A0A0A;
+  --primary: #0A0A0A;                          /* charcoal */
   --primary-foreground: #FAFAFA;
-  --secondary: #F0EFEB;                        /* warm secondary */
-  --secondary-foreground: #1a1a1a;
-  --muted: #F0EFEB;
-  --muted-foreground: #787774;                 /* muted gray */
-  --accent: #F0EFEB;
-  --accent-foreground: #1a1a1a;
-  --destructive: #9F2F2D;                      /* muted red */
-  --border: #EAEAEA;                           /* ultra-light divider */
-  --input: #EAEAEA;
+  --secondary: #F5F5F5;                        /* clean secondary */
+  --secondary-foreground: #0A0A0A;
+  --muted: #F5F5F5;
+  --muted-foreground: #888888;                 /* muted gray */
+  --accent: #F5F5F5;
+  --accent-foreground: #0A0A0A;
+  --destructive: #DC2626;                      /* red */
+  --border: #E5E5E5;                           /* neutral divider */
+  --input: #E5E5E5;
   --ring: #CCCCCC;
-  --chart-1: #111111;
+  --chart-1: #0A0A0A;
   --chart-2: #555555;
   --chart-3: #888888;
   --chart-4: #BBBBBB;
   --chart-5: #DDDDDD;
-  --radius: 0.5rem;                            /* 8px — crisp radius */
-  --sidebar: #FBFBFA;
-  --sidebar-foreground: #1a1a1a;
-  --sidebar-primary: #111111;
+  --radius: 0.5rem;                            /* 8px */
+  --sidebar: #FAFAFA;
+  --sidebar-foreground: #0A0A0A;
+  --sidebar-primary: #0A0A0A;
   --sidebar-primary-foreground: #FAFAFA;
-  --sidebar-accent: #F0EFEB;
-  --sidebar-accent-foreground: #1a1a1a;
-  --sidebar-border: #EAEAEA;
+  --sidebar-accent: #F5F5F5;
+  --sidebar-accent-foreground: #0A0A0A;
+  --sidebar-border: #E5E5E5;
   --sidebar-ring: #CCCCCC;
 }
 
@@ -160,31 +161,31 @@
 @layer utilities {
   /* Editorial card — white surface with 1px border */
   .glass {
-    @apply border border-[#EAEAEA] bg-white backdrop-blur-md;
+    @apply border border-neutral-100 bg-white backdrop-blur-md;
   }
   .glass-hover {
-    @apply transition-all duration-300 hover:border-[#D5D5D5];
+    @apply transition-all duration-300 hover:border-neutral-200;
   }
 
   /* Diffusion shadow — ultra-light, wide-spreading */
   .shadow-diffuse {
-    box-shadow: 0 20px 40px -15px rgba(0,0,0,0.05);
+    box-shadow: 0 20px 40px -15px rgba(0,0,0,0.04);
   }
   .shadow-diffuse-sm {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
   }
 
   /* Tight tracking for headings */
   .tracking-tight-heading {
-    letter-spacing: -0.03em;
+    letter-spacing: -0.035em;
   }
 
   /* Editorial card surface */
   .card-surface {
-    @apply rounded-lg border border-[#EAEAEA] bg-white;
+    @apply rounded-lg border border-neutral-100 bg-white;
   }
   .card-surface-hover {
-    @apply rounded-lg border border-[#EAEAEA] bg-white transition-colors duration-300 hover:bg-[#FBFBFA];
+    @apply rounded-lg border border-neutral-100 bg-white transition-all duration-300 hover:border-neutral-200 hover:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.06)];
   }
 
   /* Tactile feedback — taste-skill Rule 5 */
