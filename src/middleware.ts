@@ -41,6 +41,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Пропускаем внутренние print-страницы (защищены токеном внутри page)
+  if (pathname.startsWith("/print/")) {
+    return NextResponse.next();
+  }
+
   // Проверяем JWT токен
   const token = await getToken({
     req: request,

@@ -130,6 +130,10 @@ model Report {
   scoreContent    Float?   // Компонент score за контент
   scoreAuthority  Float?   // Компонент score за авторитет бренда
 
+  // ─── Unit Economics (LLM usage tracking) ────────────
+  tokensUsed      Int      @default(0)   // Суммарное кол-во токенов (prompt + completion)
+  llmCost         Float    @default(0)   // Расчётная стоимость LLM-вызовов в USD
+
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   shareOfVoices   ShareOfVoice[]
   recommendations Recommendation[]

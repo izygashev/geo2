@@ -11,6 +11,7 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import { processReport } from "./report.processor";
+import { sendTelegramAlert, formatJobFailedAlert, formatJobStalledAlert } from "../lib/telegram";
 
 // ─── Redis connection config ─────────────────────────────
 function parseRedisUrl(url: string) {
@@ -53,6 +54,14 @@ worker.on("failed", (job, err) => {
   if (job) {
     console.log(`[Worker]    Попытка ${job.attemptsMade} из ${job.opts.attempts}`);
   }
+  sendTelegramAlert(
+    formatJobFailedAlert(job?.id, job?.name, err, job?.attemptsMade, job?.opts.attempts)
+  );
+});
+
+worker.on("stalled", (jobId) => {
+  console.warn(`[Worker] ⚠️ Job ${jobId} завис (stalled)`);
+  sendTelegramAlert(formatJobStalledAlert(jobId));
 });
 
 worker.on("error", (err) => {

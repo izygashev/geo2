@@ -15,6 +15,7 @@ import {
   checkShareOfVoiceMultiLlm,
   generateRecommendations,
   checkDigitalPr,
+  LlmUsageAccumulator,
   type SovCheckResult,
 } from "@/services/llm";
 import { sendReportReadyEmail } from "@/lib/email";
@@ -64,6 +65,9 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
   console.log(`${"═".repeat(60)}\n`);
 
   try {
+    // ── LLM Usage Accumulator (unit economics) ──
+    const usageAccumulator = new LlmUsageAccumulator();
+
     // ═══════════════════════════════════════════════════════
     // ШАГ 1: Парсинг сайта через Playwright
     // ═══════════════════════════════════════════════════════
@@ -81,7 +85,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     console.log(`[Worker] ── Шаг 2/5: Генерация ключевых запросов ──`);
     await progress(job, { percent: 25, step: "Генерируем ключевые запросы..." });
 
-    const keywords = await generateKeywords(siteData);
+    const keywords = await generateKeywords(siteData, usageAccumulator);
 
     console.log(
       `[Worker] ✅ Ключевые запросы: ${keywords.map((k) => `"${k.query}"`).join(", ")}`
@@ -111,10 +115,10 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
       });
 
       if (multiLlm) {
-        const multiResults = await checkShareOfVoiceMultiLlm(kw.query, projectUrl);
+        const multiResults = await checkShareOfVoiceMultiLlm(kw.query, projectUrl, usageAccumulator);
         sovResults.push(...multiResults);
       } else {
-        const result = await checkShareOfVoice(kw.query, projectUrl);
+        const result = await checkShareOfVoice(kw.query, projectUrl, usageAccumulator);
         sovResults.push(result);
       }
 
@@ -139,7 +143,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     console.log(`[Worker] ── Шаг 4/5: Digital PR ──`);
 
     const brandName = siteData.title || new URL(projectUrl).hostname.replace("www.", "");
-    const digitalPrResults = await checkDigitalPr(projectUrl, brandName);
+    const digitalPrResults = await checkDigitalPr(projectUrl, brandName, usageAccumulator);
 
     const prMentioned = digitalPrResults.filter((m) => m.mentioned).length;
     console.log(`[Worker] ✅ Digital PR: ${prMentioned}/${digitalPrResults.length} площадок`);
@@ -160,7 +164,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
       return;
     }
 
-    const analysis = await generateRecommendations(siteData, sovResults);
+    const analysis = await generateRecommendations(siteData, sovResults, usageAccumulator);
 
     console.log(`[Worker] ✅ Score: ${analysis.overallScore}, рекомендаций: ${analysis.recommendations.length}`);
     await progress(job, { percent: 90, step: "Сохраняем результаты..." });
@@ -223,6 +227,9 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
           scoreContent: analysis.scoreBreakdown.content,
           scoreAuthority: analysis.scoreBreakdown.authority,
           digitalPr: JSON.parse(JSON.stringify(digitalPrResults)),
+          // ── Unit Economics ──
+          tokensUsed: usageAccumulator.totalTokens,
+          llmCost: usageAccumulator.toJSON().estimatedCostUsd,
         },
       });
 
@@ -290,6 +297,9 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     console.log(`[Worker]    Score: ${analysis.overallScore}`);
     console.log(`[Worker]    SoV: ${mentionedCount}/${sovResults.length}`);
     console.log(`[Worker]    Рекомендаций: ${analysis.recommendations.length}`);
+    const usage = usageAccumulator.toJSON();
+    console.log(`[Worker]    Токены: ${usage.totalTokens} (prompt: ${usage.promptTokens}, completion: ${usage.completionTokens})`);
+    console.log(`[Worker]    LLM-стоимость: $${usage.estimatedCostUsd.toFixed(4)}`);
     console.log(`${"─".repeat(60)}\n`);
   } catch (error) {
     console.error(`[Worker] ❌ Ошибка обработки отчёта ${reportId}:`, error);

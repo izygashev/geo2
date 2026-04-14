@@ -12,6 +12,7 @@
 import { Worker, Job } from "bullmq";
 import { redisConnection } from "@/lib/redis";
 import { processReport } from "../workers/report.processor";
+import { sendTelegramAlert, formatJobFailedAlert, formatJobStalledAlert } from "@/lib/telegram";
 
 let workerInstance: Worker | null = null;
 
@@ -59,6 +60,14 @@ export function ensureWorkerRunning(): void {
     if (job) {
       console.log(`[WorkerManager]    Попытка ${job.attemptsMade} из ${job.opts.attempts}`);
     }
+    sendTelegramAlert(
+      formatJobFailedAlert(job?.id, job?.name, err, job?.attemptsMade, job?.opts.attempts)
+    );
+  });
+
+  worker.on("stalled", (jobId) => {
+    console.warn(`[WorkerManager] ⚠️ Job ${jobId} завис (stalled)`);
+    sendTelegramAlert(formatJobStalledAlert(jobId));
   });
 
   worker.on("error", (err) => {

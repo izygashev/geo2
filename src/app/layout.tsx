@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import YandexMetrika from "@/components/YandexMetrika";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -195,6 +197,9 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        <Suspense fallback={null}>
+          <YandexMetrika />
+        </Suspense>
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

@@ -1,0 +1,225 @@
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { BarChart3, Shield, FileText, Zap, Users, Globe, Calendar } from "lucide-react";
+import { ScoreRing, ScoreBreakdownBar } from "@/components/score-ring";
+import { SiteChecklist } from "@/components/site-checklist";
+import { SovDonutChart, SovBarChart } from "@/components/sov-charts";
+import { CompetitorsTable } from "@/components/competitors-table";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
+
+/**
+ * Внутренняя print-страница для генерации PDF через Playwright.
+ * Защищена токеном (query ?token=...) — не предназначена для конечных пользователей.
+ * Оптимизирована для печати: белый фон, без навигации, print-color-adjust.
+ */
+export default async function PrintReportPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ token?: string }>;
+}) {
+  // ── Защита: проверяем внутренний токен ──
+  const { token } = await searchParams;
+  const secret = process.env.PRINT_SECRET;
+
+  if (!secret || token !== secret) {
+    notFound();
+  }
+
+  const { id: reportId } = await params;
+
+  const report = await prisma.report.findUnique({
+    where: { id: reportId },
+    include: {
+      project: { select: { name: true, url: true } },
+      shareOfVoices: { orderBy: { createdAt: "asc" } },
+      recommendations: { orderBy: { createdAt: "asc" } },
+    },
+  });
+
+  if (!report || report.status !== "COMPLETED") {
+    notFound();
+  }
+
+  // ── SoV агрегация ──
+  const sovTotal = report.shareOfVoices.length;
+  const sovMentioned = report.shareOfVoices.filter((s) => s.isMentioned).length;
+  const sovPercent = sovTotal > 0 ? Math.round((sovMentioned / sovTotal) * 100) : 0;
+
+  // ── Конкуренты ──
+  const targetBrand = (() => {
+    try {
+      const hostname = new URL(report.project.url).hostname.replace(/^www\./, "");
+      return hostname.split(".")[0].toLowerCase();
+    } catch {
+      return report.project.name.toLowerCase();
+    }
+  })();
+
+  const competitors = new Map<string, number>();
+  for (const sov of report.shareOfVoices) {
+    const comps = (sov.competitors as unknown[]) ?? [];
+    for (const c of comps) {
+      const name =
+        typeof c === "string"
+          ? c
+          : c &&
+              typeof c === "object" &&
+              "name" in c &&
+              typeof (c as Record<string, unknown>).name === "string"
+            ? (c as { name: string }).name
+            : null;
+      if (!name || !name.trim()) continue;
+      const cLower = name.toLowerCase().trim();
+      if (cLower.includes(targetBrand) || targetBrand.includes(cLower.replace(/\s+/g, "")))
+        continue;
+      competitors.set(name, (competitors.get(name) ?? 0) + 1);
+    }
+  }
+
+  const topCompetitors = [...competitors.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, count]) => ({
+      name,
+      mentions: count,
+      percent: sovTotal > 0 ? Math.round((count / sovTotal) * 100) : 0,
+    }));
+
+  const score = report.overallScore ? Math.round(report.overallScore) : 0;
+
+  const breakdownItems = [
+    { label: "Share of Voice", value: report.scoreSov ?? 0, max: 30, icon: <BarChart3 className="h-3.5 w-3.5" /> },
+    { label: "Schema.org", value: report.scoreSchema ?? 0, max: 20, icon: <Shield className="h-3.5 w-3.5" /> },
+    { label: "llms.txt", value: report.scoreLlmsTxt ?? 0, max: 15, icon: <FileText className="h-3.5 w-3.5" /> },
+    { label: "Контент", value: report.scoreContent ?? 0, max: 20, icon: <Zap className="h-3.5 w-3.5" /> },
+    { label: "Авторитет", value: report.scoreAuthority ?? 0, max: 15, icon: <Users className="h-3.5 w-3.5" /> },
+  ];
+
+  return (
+    <>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media print {
+              .page-break { page-break-before: always; }
+            }
+          `,
+        }}
+      />
+      <div className="min-h-screen bg-white" data-report-ready="true">
+        {/* Header */}
+        <div className="border-b border-[#EAEAEA]">
+            <div className="mx-auto max-w-4xl px-6 py-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-sm text-[#787774]">
+                    <Globe className="h-4 w-4" />
+                    <span>Отчёт AI-видимости</span>
+                  </div>
+                  <h1 className="mt-2 text-lg font-bold tracking-tight text-[#1a1a1a]">
+                    {report.project.name}
+                  </h1>
+                  <div className="mt-1 flex items-center gap-3 text-xs text-[#BBBBBB]">
+                    <span>{report.project.url}</span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {report.createdAt.toLocaleDateString("ru-RU", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right text-xs text-[#BBBBBB]">
+                  <div className="font-semibold text-[#787774]">Geo Studio</div>
+                  <div>geostudioai.ru</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-4xl space-y-6 px-6 py-8">
+            {/* Score */}
+            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
+                <ScoreRing score={score} size={120} />
+                <div className="flex-1 space-y-2">
+                  {breakdownItems.map((item) => (
+                    <ScoreBreakdownBar
+                      key={item.label}
+                      label={item.label}
+                      value={Math.round(item.value)}
+                      icon={item.icon}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Checklist */}
+            <SiteChecklist
+              hasLlmsTxt={report.hasLlmsTxt}
+              schemaOrgTypes={report.schemaOrgTypes as string[]}
+              siteTitle={report.siteTitle}
+              siteDescription={report.siteDescription}
+              siteH1={report.siteH1}
+              contentLength={report.contentLength}
+              robotsTxtAiFriendly={report.robotsTxtAiFriendly}
+              semanticHtmlValid={report.semanticHtmlValid}
+            />
+
+            {/* SoV */}
+            {sovTotal > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SovDonutChart mentioned={sovMentioned} total={sovTotal} />
+                <SovBarChart
+                  items={report.shareOfVoices.map((s) => ({
+                    keyword: s.keyword,
+                    isMentioned: s.isMentioned,
+                  }))}
+                />
+              </div>
+            )}
+
+            {/* Competitors */}
+            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+              <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
+                Топ AI-рекомендаций в нише
+              </h2>
+              {topCompetitors.length > 0 ? (
+                <CompetitorsTable competitors={topCompetitors} />
+              ) : (
+                <p className="py-4 text-center text-sm text-[#787774]">
+                  AI-системы пока не определили конкурентов
+                </p>
+              )}
+            </div>
+
+            {/* Recommendations */}
+            {report.recommendations.length > 0 && (
+              <div className="page-break">
+                <RecommendationsPanel
+                  recommendations={report.recommendations.map((rec) => ({
+                    id: rec.id,
+                    type: rec.type,
+                    title: rec.title,
+                    description: rec.description,
+                    generatedCode: rec.generatedCode,
+                  }))}
+                  projectUrl={report.project.url}
+                />
+              </div>
+            )}
+
+            {/* Footer */}
+            <p className="pt-4 text-center text-xs text-[#BBBBBB]">
+              Создано с помощью Geo Studio — анализ AI-видимости сайтов · geostudioai.ru
+            </p>
+          </div>
+        </div>
+      </>
+  );
+}

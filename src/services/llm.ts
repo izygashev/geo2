@@ -11,6 +11,71 @@ import { z } from "zod";
 import type { SiteData } from "./scraper";
 import { extractJson, repairJson } from "../lib/json-utils";
 
+// ─── LLM Usage Tracking ─────────────────────────────────
+export interface LlmUsageStats {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
+/** Мutableный аккумулятор usage — один на весь pipeline отчёта */
+export class LlmUsageAccumulator {
+  promptTokens = 0;
+  completionTokens = 0;
+  totalTokens = 0;
+  estimatedCostUsd = 0;
+
+  add(usage: LlmUsageStats) {
+    this.promptTokens += usage.promptTokens;
+    this.completionTokens += usage.completionTokens;
+    this.totalTokens += usage.totalTokens;
+    this.estimatedCostUsd += usage.estimatedCostUsd;
+  }
+
+  toJSON(): LlmUsageStats {
+    return {
+      promptTokens: this.promptTokens,
+      completionTokens: this.completionTokens,
+      totalTokens: this.totalTokens,
+      estimatedCostUsd: Math.round(this.estimatedCostUsd * 1_000_000) / 1_000_000,
+    };
+  }
+}
+
+// ─── Расценки за 1 токен (USD) по модели ─────────────────
+// Источник: https://openrouter.ai/docs/models
+const MODEL_PRICING: Record<string, { prompt: number; completion: number }> = {
+  "anthropic/claude-opus-4.6":     { prompt: 15 / 1_000_000, completion: 75 / 1_000_000 },
+  "anthropic/claude-sonnet-4.6":   { prompt: 3 / 1_000_000,  completion: 15 / 1_000_000 },
+  "perplexity/sonar-pro-search":   { prompt: 3 / 1_000_000,  completion: 15 / 1_000_000 },
+};
+const DEFAULT_PRICING = { prompt: 0.5 / 1_000_000, completion: 1.5 / 1_000_000 };
+
+function estimateCost(
+  model: string,
+  promptTokens: number,
+  completionTokens: number
+): number {
+  const pricing = MODEL_PRICING[model] ?? DEFAULT_PRICING;
+  return promptTokens * pricing.prompt + completionTokens * pricing.completion;
+}
+
+function extractUsage(
+  completion: OpenAI.Chat.ChatCompletion,
+  model: string
+): LlmUsageStats {
+  const prompt = completion.usage?.prompt_tokens ?? 0;
+  const compl = completion.usage?.completion_tokens ?? 0;
+  const total = completion.usage?.total_tokens ?? prompt + compl;
+  return {
+    promptTokens: prompt,
+    completionTokens: compl,
+    totalTokens: total,
+    estimatedCostUsd: estimateCost(model, prompt, compl),
+  };
+}
+
 // ─── OpenRouter Client (lazy init — ждём загрузки .env) ──
 let _openrouter: OpenAI | null = null;
 
@@ -249,7 +314,8 @@ const API_TIMEOUT = 180_000; // 180 секунд — Sonar Pro Search делае
 async function callWithFallback(
   messages: { role: "system" | "user"; content: string }[],
   maxTokens: number,
-  primaryModel: string = CLAUDE_MODEL
+  primaryModel: string = CLAUDE_MODEL,
+  usageAccumulator?: LlmUsageAccumulator,
 ): Promise<string> {
   // Пробуем основную модель
   try {
@@ -262,6 +328,9 @@ async function callWithFallback(
       API_TIMEOUT,
       primaryModel
     );
+    if (usageAccumulator) {
+      usageAccumulator.add(extractUsage(completion, primaryModel));
+    }
     return completion.choices[0]?.message?.content ?? "";
   } catch (error: unknown) {
     const status = (error as { status?: number }).status;
@@ -287,6 +356,9 @@ async function callWithFallback(
       const text = completion.choices[0]?.message?.content ?? "";
       if (text) {
         console.log(`[LLM] ✅ Топ-модель ${topModel} справилась!`);
+        if (usageAccumulator) {
+          usageAccumulator.add(extractUsage(completion, topModel));
+        }
         return text;
       }
     }
@@ -334,7 +406,17 @@ async function callWithFallback(
         if (retry.ok) {
           const data = await retry.json();
           const text = data.choices?.[0]?.message?.content ?? "";
-          if (text) return text;
+          if (text) {
+            if (usageAccumulator && data.usage) {
+              usageAccumulator.add({
+                promptTokens: data.usage.prompt_tokens ?? 0,
+                completionTokens: data.usage.completion_tokens ?? 0,
+                totalTokens: data.usage.total_tokens ?? 0,
+                estimatedCostUsd: 0, // бесплатные модели
+              });
+            }
+            return text;
+          }
         }
         continue;
       }
@@ -346,7 +428,17 @@ async function callWithFallback(
 
       const data = await resp.json();
       const text = data.choices?.[0]?.message?.content ?? "";
-      if (text) return text;
+      if (text) {
+        if (usageAccumulator && data.usage) {
+          usageAccumulator.add({
+            promptTokens: data.usage.prompt_tokens ?? 0,
+            completionTokens: data.usage.completion_tokens ?? 0,
+            totalTokens: data.usage.total_tokens ?? 0,
+            estimatedCostUsd: 0, // бесплатные модели
+          });
+        }
+        return text;
+      }
     } catch (err) {
       console.error(`[LLM] ❌ Ошибка на ${freeModel}:`, err);
       continue;
@@ -371,12 +463,13 @@ async function callLlmWithRetry<T>(
   maxTokens: number,
   schema: z.ZodType<T>,
   primaryModel?: string,
+  usageAccumulator?: LlmUsageAccumulator,
 ): Promise<T> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const rawText = await callWithFallback(messages, maxTokens, primaryModel);
+      const rawText = await callWithFallback(messages, maxTokens, primaryModel, usageAccumulator);
 
       // Extract JSON from markdown fences / raw text
       const jsonStr = extractJson(rawText);
@@ -420,7 +513,7 @@ async function callLlmWithRetry<T>(
 // ═══════════════════════════════════════════════════════════
 // 1. Генерация ключевых запросов
 // ═══════════════════════════════════════════════════════════
-export async function generateKeywords(siteData: SiteData): Promise<KeywordItem[]> {
+export async function generateKeywords(siteData: SiteData, usageAccumulator?: LlmUsageAccumulator): Promise<KeywordItem[]> {
   console.log(`[LLM] 🔑 Генерирую ключевые запросы для ${siteData.url}`);
 
   const currentYear = new Date().getFullYear();
@@ -460,7 +553,8 @@ Generate exactly 5 diverse queries: mix of informational, commercial, and naviga
       ],
       1000,
       KeywordsSchema,
-      CLAUDE_MODEL
+      CLAUDE_MODEL,
+      usageAccumulator
     );
 
     console.log(`[LLM] ✅ Сгенерировано ${parsed.keywords.length} ключевых запросов`);
@@ -484,7 +578,8 @@ Generate exactly 5 diverse queries: mix of informational, commercial, and naviga
 // ═══════════════════════════════════════════════════════════
 export async function checkShareOfVoice(
   keyword: string,
-  siteUrl: string
+  siteUrl: string,
+  usageAccumulator?: LlmUsageAccumulator,
 ): Promise<SovCheckResult> {
   console.log(`[LLM] 🔍 SoV проверка: "${keyword}"`);
 
@@ -529,7 +624,8 @@ CRITICAL RULES:
       ],
       1500,
       SovResultSchema,
-      SONAR_MODEL
+      SONAR_MODEL,
+      usageAccumulator
     );
 
     // Programmatic verification — не доверяем LLM self-reporting
@@ -571,7 +667,8 @@ CRITICAL RULES:
 // ═══════════════════════════════════════════════════════════
 export async function checkShareOfVoiceMultiLlm(
   keyword: string,
-  siteUrl: string
+  siteUrl: string,
+  usageAccumulator?: LlmUsageAccumulator,
 ): Promise<SovCheckResult[]> {
   console.log(`[LLM] 🔍 Multi-LLM SoV проверка: "${keyword}"`);
 
@@ -616,7 +713,8 @@ CRITICAL RULES:
         ],
         1500,
         SovResultSchema,
-        model.id
+        model.id,
+        usageAccumulator
       );
 
       // Programmatic verification — не доверяем LLM self-reporting
@@ -664,7 +762,8 @@ CRITICAL RULES:
 // ═══════════════════════════════════════════════════════════
 export async function generateRecommendations(
   siteData: SiteData,
-  sovResults: SovCheckResult[]
+  sovResults: SovCheckResult[],
+  usageAccumulator?: LlmUsageAccumulator,
 ): Promise<AnalysisResult> {
   console.log(`[LLM] 📝 Генерирую рекомендации для ${siteData.url}`);
 
@@ -759,7 +858,8 @@ The overallScore should be a weighted average of scoreBreakdown components.`;
       ],
       2000,
       RecommendationsSchema,
-      CLAUDE_MODEL
+      CLAUDE_MODEL,
+      usageAccumulator
     );
 
     console.log(
@@ -958,7 +1058,8 @@ const DIGITAL_PR_PLATFORMS = [
 
 export async function checkDigitalPr(
   siteUrl: string,
-  brandName: string
+  brandName: string,
+  usageAccumulator?: LlmUsageAccumulator,
 ): Promise<DigitalPrMention[]> {
   const domain = new URL(siteUrl).hostname.replace("www.", "");
   const platformsList = DIGITAL_PR_PLATFORMS.join(", ");
@@ -1014,7 +1115,8 @@ Return exactly ${DIGITAL_PR_PLATFORMS.length} entries, one per platform: ${platf
       ],
       2000,
       DigitalPrSchema,
-      SONAR_MODEL
+      SONAR_MODEL,
+      usageAccumulator
     );
 
     const mentionedCount = parsed.mentions.filter((m) => m.mentioned).length;

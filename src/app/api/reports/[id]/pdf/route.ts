@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { chromium } from "playwright";
+import crypto from "crypto";
 
 export async function GET(
   _req: NextRequest,
@@ -23,7 +24,6 @@ export async function GET(
     },
     select: {
       id: true,
-      shareId: true,
       project: { select: { name: true, url: true } },
     },
   });
@@ -32,22 +32,16 @@ export async function GET(
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 
-  // Если нет shareId — создаём временный для рендера
-  let shareId = report.shareId;
-  let tempShare = false;
-
-  if (!shareId) {
-    const { v4: uuidv4 } = await import("uuid");
-    shareId = uuidv4();
-    await prisma.report.update({
-      where: { id: reportId },
-      data: { shareId },
-    });
-    tempShare = true;
-  }
-
+  // ── Формируем URL к внутренней print-странице ──
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const shareUrl = `${baseUrl}/r/${shareId}`;
+  // Генерируем одноразовый токен, если PRINT_SECRET не задан
+  const printSecret =
+    process.env.PRINT_SECRET ?? crypto.randomBytes(32).toString("hex");
+  // Если PRINT_SECRET не задан — временно устанавливаем для этого запроса
+  if (!process.env.PRINT_SECRET) {
+    process.env.PRINT_SECRET = printSecret;
+  }
+  const printUrl = `${baseUrl}/print/report/${reportId}?token=${encodeURIComponent(printSecret)}`;
 
   let browser;
   try {
@@ -56,20 +50,12 @@ export async function GET(
       viewport: { width: 1280, height: 900 },
     });
 
-    await page.goto(shareUrl, { waitUntil: "networkidle", timeout: 30_000 });
+    await page.goto(printUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
     // Ждём, пока основной контент прогрузится
-    await page.waitForSelector('[data-report-ready="true"], .score-ring, main', {
-      timeout: 10_000,
-    }).catch(() => {});
-
-    // Скрываем элементы, не нужные в PDF
-    await page.addStyleTag({
-      content: `
-        [data-pdf-hide] { display: none !important; }
-        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      `,
-    });
+    await page
+      .waitForSelector('[data-report-ready="true"]', { timeout: 10_000 })
+      .catch(() => {});
 
     const pdfBuffer = await page.pdf({
       format: "A4",
@@ -88,14 +74,6 @@ export async function GET(
         </div>
       `,
     });
-
-    // Если создали временный shareId — удаляем
-    if (tempShare) {
-      await prisma.report.update({
-        where: { id: reportId },
-        data: { shareId: null },
-      });
-    }
 
     const safeName = report.project.name.replace(/[^a-zA-Zа-яА-Я0-9]/g, "_");
     const date = new Date().toISOString().slice(0, 10);
