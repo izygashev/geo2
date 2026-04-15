@@ -10,6 +10,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import type { SiteData } from "./scraper";
 import { extractJson, repairJson } from "../lib/json-utils";
+import { getLlmsTxtGenerationPrompt, buildLlmsTxt } from "../lib/templates/llms-template";
 
 // ─── LLM Usage Tracking ─────────────────────────────────
 export interface LlmUsageStats {
@@ -253,6 +254,20 @@ const DigitalPrSchema = z.object({
       sentiment: z.enum(["positive", "neutral", "negative"]).optional(),
     })
   ),
+});
+
+const LlmsTxtSchema = z.object({
+  companyName: z.string(),
+  shortDescription: z.string(),
+  detailedDescription: z.string(),
+  niche: z.string(),
+  problemStatement: z.string(),
+  competitiveAdvantage: z.string(),
+  targetAudience: z.array(z.string()).min(1),
+  useCases: z.array(z.string()).min(1),
+  features: z.array(z.string()).min(1),
+  faq: z.array(z.object({ question: z.string(), answer: z.string() })).min(1),
+  contacts: z.array(z.object({ label: z.string(), value: z.string() })).min(1),
 });
 
 // ─── Типы ────────────────────────────────────────────────
@@ -1133,5 +1148,76 @@ Return exactly ${DIGITAL_PR_PLATFORMS.length} entries, one per platform: ${platf
       mentioned: false,
       context: "Не удалось проверить площадку — повторите анализ позже",
     }));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 5. Генерация персонализированного llms.txt для сайта клиента
+// ═══════════════════════════════════════════════════════════
+export async function generateLlmsTxt(
+  siteData: SiteData,
+  sovResults: SovCheckResult[],
+  usageAccumulator?: LlmUsageAccumulator,
+): Promise<string> {
+  console.log(`[LLM] 📄 Генерирую llms.txt для ${siteData.url}`);
+
+  const categories = sovResults
+    .map((r) => r.categorySearched)
+    .filter((v): v is string => !!v)
+    .filter((v, i, a) => a.indexOf(v) === i);
+
+  const competitorNames = sovResults
+    .flatMap((r) => r.competitors.map((c) => c.name))
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .slice(0, 10);
+
+  const prompt = getLlmsTxtGenerationPrompt(
+    siteData.url,
+    siteData.title,
+    siteData.description,
+    siteData.bodyText.slice(0, 10000),
+    siteData.schemaOrgTypes,
+    categories[0] ?? null,
+    competitorNames,
+  );
+
+  try {
+    const parsed = await callLlmWithRetry(
+      [
+        { role: "system", content: "You are a GEO (Generative Engine Optimization) expert. Return ONLY valid JSON." },
+        { role: "user", content: prompt },
+      ],
+      2000,
+      LlmsTxtSchema,
+      CLAUDE_SONNET_MODEL,
+      usageAccumulator,
+    );
+
+    const llmsTxt = buildLlmsTxt({
+      ...parsed,
+      url: siteData.url,
+    });
+
+    console.log(`[LLM] ✅ llms.txt сгенерирован (${llmsTxt.length} символов)`);
+    return llmsTxt;
+  } catch (error) {
+    console.error("[LLM] ❌ Ошибка генерации llms.txt:", error);
+
+    // Fallback: минимальный llms.txt из имеющихся данных
+    const brandName = siteData.title || new URL(siteData.url).hostname;
+    return buildLlmsTxt({
+      companyName: brandName,
+      url: siteData.url,
+      shortDescription: siteData.description || `${brandName} — ваш надёжный партнёр.`,
+      detailedDescription: siteData.description || `${brandName} предоставляет качественные продукты и услуги.`,
+      niche: categories[0] ?? "бизнес-услуги",
+      problemStatement: "Информация недоступна — обновите контент сайта для лучшего анализа.",
+      competitiveAdvantage: "Информация недоступна — добавьте описание преимуществ на сайт.",
+      targetAudience: ["Бизнес-клиенты"],
+      useCases: ["Основной сценарий использования"],
+      features: [`**${brandName}:** ваш основной продукт/услуга`],
+      faq: [{ question: `Что такое ${brandName}?`, answer: siteData.description || "Описание недоступно." }],
+      contacts: [{ label: "Сайт", value: siteData.url }],
+    });
   }
 }

@@ -240,6 +240,7 @@ export interface RecommendationItem {
 interface RecommendationsPanelProps {
   recommendations: RecommendationItem[];
   projectUrl?: string;
+  isPdf?: boolean;
 }
 
 /* ────────────────────────────────────────────────── */
@@ -281,7 +282,7 @@ function AuditProgressCard({ recommendations }: { recommendations: Recommendatio
   const projectedSovGain = Math.min(50, (total - completed) * 5 + 10);
 
   return (
-    <div className="rounded-xl border border-[#EAEAEA] bg-gradient-to-br from-white via-white to-[#F7F6F3] p-6 shadow-sm">
+    <div className="rounded-xl border border-[#EAEAEA] bg-gradient-to-br from-white via-white to-[#F7F6F3] p-6 shadow-sm print-avoid-break">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
@@ -370,7 +371,7 @@ function AuditProgressCard({ recommendations }: { recommendations: Recommendatio
 /*  Single Recommendation Card                         */
 /* ────────────────────────────────────────────────── */
 
-function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: number }) {
+function RecCard({ rec, globalIndex, isPdf }: { rec: RecommendationItem; globalIndex: number; isPdf?: boolean }) {
   const [showCode, setShowCode] = useState(false);
   const [showTz, setShowTz] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -419,7 +420,7 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
   };
 
   return (
-    <div className="group relative rounded-xl border border-[#EAEAEA] bg-white transition-all hover:border-[#D5D4D0] hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+    <div className="group relative rounded-xl border border-[#EAEAEA] bg-white transition-all hover:border-[#D5D4D0] hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)] print-avoid-break">
       {/* Top accent bar */}
       <div
         className={`absolute inset-x-0 top-0 h-[2px] rounded-t-xl transition-opacity ${
@@ -479,7 +480,8 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
             </p>
 
             {/* ── Action bar ────────────────────────── */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#F0EFEB] pt-4">
+            {!isPdf && (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#F0EFEB] pt-4 print-hide">
               {/* Show code toggle — primary action */}
               {hasCode && (
                 <Button
@@ -513,9 +515,10 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
                 {showTz ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </Button>
             </div>
+            )}
 
             {/* ── TZ block ──────────────────────────── */}
-            {showTz && (
+            {showTz && !isPdf && (
               <div className="mt-3 relative overflow-hidden rounded-lg border border-[#E5E4E0] bg-[#FAFAF8]">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-[#EAEAEA] px-4 py-2.5">
@@ -549,13 +552,14 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
             )}
 
             {/* ── Code block ────────────────────────── */}
-            {showCode && hasCode && (
-              <div className="mt-3 relative overflow-hidden rounded-lg border border-[#E5E4E0] bg-[#1a1a1a]">
+            {(showCode || isPdf) && hasCode && (
+              <div className="mt-3 relative overflow-hidden rounded-lg border border-[#E5E4E0] bg-[#1a1a1a] print-avoid-break" style={isPdf ? { backgroundColor: '#F7F6F3', borderColor: '#E5E4E0' } : undefined}>
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-[#333] px-4 py-2">
-                  <span className="text-[10px] font-medium uppercase tracking-widest text-[#666]">
+                <div className="flex items-center justify-between border-b border-[#333] px-4 py-2" style={isPdf ? { borderColor: '#EAEAEA' } : undefined}>
+                  <span className="text-[10px] font-medium uppercase tracking-widest text-[#666]" style={isPdf ? { color: '#787774' } : undefined}>
                     Готовый код — скопируйте и передайте программисту
                   </span>
+                  {!isPdf && (
                   <button
                     onClick={handleCopyCode}
                     className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-[#888] transition-all hover:bg-[#333] hover:text-white"
@@ -572,10 +576,11 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
                       </>
                     )}
                   </button>
+                  )}
                 </div>
                 {/* Code */}
                 <div className="overflow-x-auto p-4">
-                  <pre className="text-[12px] leading-[1.7] text-[#E0E0E0] font-mono whitespace-pre-wrap break-words">
+                  <pre className="text-[12px] leading-[1.7] font-mono whitespace-pre-wrap break-words" style={isPdf ? { color: '#333' } : { color: '#E0E0E0' }}>
                     {rec.generatedCode}
                   </pre>
                 </div>
@@ -595,6 +600,7 @@ function RecCard({ rec, globalIndex }: { rec: RecommendationItem; globalIndex: n
 export function RecommendationsPanel({
   recommendations,
   projectUrl,
+  isPdf = false,
 }: RecommendationsPanelProps) {
   // Bucket recommendations into categories
   const buckets: Record<Category, RecommendationItem[]> = {
@@ -669,7 +675,7 @@ export function RecommendationsPanel({
       <AuditProgressCard recommendations={recommendations} />
 
       {/* Summary strip */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3 print-avoid-break">
         {(["critical", "technical", "growth"] as Category[]).map((cat) => {
           const meta = CATEGORY_META[cat];
           const Icon = meta.icon;
@@ -689,7 +695,41 @@ export function RecommendationsPanel({
         })}
       </div>
 
-      {/* Tabbed content */}
+      {/* ── PDF mode: flat list of all categories, no tabs ── */}
+      {isPdf ? (
+        <div className="space-y-6">
+          {(["critical", "technical", "growth"] as Category[]).map((cat) => {
+            const meta = CATEGORY_META[cat];
+            const Icon = meta.icon;
+            const items = buckets[cat];
+            if (items.length === 0) return null;
+            return (
+              <div key={cat} className="space-y-3">
+                <div className="flex items-center gap-2 border-b border-[#EAEAEA] pb-2">
+                  <Icon className={`h-4 w-4 ${meta.color}`} />
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-[#787774]">
+                    {meta.label}
+                  </h3>
+                  <span className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${meta.badgeBg}`}>
+                    {items.length}
+                  </span>
+                </div>
+                <div className="space-y-4">
+                  {items.map((rec) => (
+                    <RecCard
+                      key={rec.id}
+                      rec={rec}
+                      globalIndex={globalIndexMap.get(rec.id) ?? 0}
+                      isPdf={true}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+      /* ── Web mode: tabbed content ── */
       <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="w-full bg-[#F7F6F3] p-1 h-auto rounded-lg gap-1">
           {(["critical", "technical", "growth"] as Category[]).map((cat) => {
@@ -743,6 +783,7 @@ export function RecommendationsPanel({
           );
         })}
       </Tabs>
+      )}
     </div>
   );
 }

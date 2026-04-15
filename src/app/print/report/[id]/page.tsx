@@ -104,6 +104,8 @@ export default async function PrintReportPage({
           __html: `
             @media print {
               .page-break { page-break-before: always; }
+              .mx-auto { margin-left: 0 !important; margin-right: 0 !important; }
+              .max-w-4xl { max-width: 100% !important; }
             }
           `,
         }}
@@ -111,7 +113,7 @@ export default async function PrintReportPage({
       <div className="min-h-screen bg-white" data-report-ready="true">
         {/* Header */}
         <div className="border-b border-[#EAEAEA]">
-            <div className="mx-auto max-w-4xl px-6 py-6">
+            <div className="mx-auto max-w-4xl px-6 py-6 print-full-width">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-sm text-[#787774]">
@@ -141,9 +143,9 @@ export default async function PrintReportPage({
             </div>
           </div>
 
-          <div className="mx-auto max-w-4xl space-y-6 px-6 py-8">
+          <div className="mx-auto max-w-4xl space-y-6 px-6 py-8 print-full-width">
             {/* Score */}
-            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6 print-avoid-break">
               <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
                 <ScoreRing score={score} size={120} />
                 <div className="flex-1 space-y-2">
@@ -160,20 +162,22 @@ export default async function PrintReportPage({
             </div>
 
             {/* Checklist */}
-            <SiteChecklist
-              hasLlmsTxt={report.hasLlmsTxt}
-              schemaOrgTypes={report.schemaOrgTypes as string[]}
-              siteTitle={report.siteTitle}
-              siteDescription={report.siteDescription}
-              siteH1={report.siteH1}
-              contentLength={report.contentLength}
-              robotsTxtAiFriendly={report.robotsTxtAiFriendly}
-              semanticHtmlValid={report.semanticHtmlValid}
-            />
+            <div className="print-avoid-break">
+              <SiteChecklist
+                hasLlmsTxt={report.hasLlmsTxt}
+                schemaOrgTypes={report.schemaOrgTypes as string[]}
+                siteTitle={report.siteTitle}
+                siteDescription={report.siteDescription}
+                siteH1={report.siteH1}
+                contentLength={report.contentLength}
+                robotsTxtAiFriendly={report.robotsTxtAiFriendly}
+                semanticHtmlValid={report.semanticHtmlValid}
+              />
+            </div>
 
             {/* SoV */}
             {sovTotal > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 print-avoid-break">
                 <SovDonutChart mentioned={sovMentioned} total={sovTotal} />
                 <SovBarChart
                   items={report.shareOfVoices.map((s) => ({
@@ -185,12 +189,12 @@ export default async function PrintReportPage({
             )}
 
             {/* Competitors */}
-            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+            <div className="rounded-xl border border-[#EAEAEA] bg-white p-6 print-avoid-break">
               <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
                 Топ AI-рекомендаций в нише
               </h2>
               {topCompetitors.length > 0 ? (
-                <CompetitorsTable competitors={topCompetitors} />
+                <CompetitorsTable competitors={topCompetitors} isPdf={true} />
               ) : (
                 <p className="py-4 text-center text-sm text-[#787774]">
                   AI-системы пока не определили конкурентов
@@ -210,6 +214,7 @@ export default async function PrintReportPage({
                     generatedCode: rec.generatedCode,
                   }))}
                   projectUrl={report.project.url}
+                  isPdf={true}
                 />
               </div>
             )}

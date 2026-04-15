@@ -30,7 +30,7 @@ export function SovDonutChart({ mentioned, total }: SovDonutProps) {
   const pct = total > 0 ? Math.round((mentioned / total) * 100) : 0;
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center print-avoid-break">
       <div className="relative h-48 w-48">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>

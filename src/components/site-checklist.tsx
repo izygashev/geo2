@@ -111,7 +111,7 @@ export function SiteChecklist({
   const passCount = items.filter((i) => i.status === "pass").length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 print-avoid-break">
       {/* Header с общим числом */}
       <div className="flex items-center justify-between">
         <div>

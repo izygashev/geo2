@@ -15,6 +15,7 @@ import {
   checkShareOfVoiceMultiLlm,
   generateRecommendations,
   checkDigitalPr,
+  generateLlmsTxt,
   LlmUsageAccumulator,
   type SovCheckResult,
 } from "@/services/llm";
@@ -148,8 +149,21 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     const prMentioned = digitalPrResults.filter((m) => m.mentioned).length;
     console.log(`[Worker] ✅ Digital PR: ${prMentioned}/${digitalPrResults.length} площадок`);
     await progress(job, {
+      percent: 75,
+      step: `Digital PR: ${prMentioned} площадок. Генерируем llms.txt...`,
+    });
+
+    // ═══════════════════════════════════════════════════════
+    // ШАГ 4.5: Генерация персонализированного llms.txt
+    // ═══════════════════════════════════════════════════════
+    console.log(`[Worker] ── Шаг 4.5: Генерация llms.txt ──`);
+
+    const generatedLlmsTxt = await generateLlmsTxt(siteData, sovResults, usageAccumulator);
+
+    console.log(`[Worker] ✅ llms.txt сгенерирован (${generatedLlmsTxt.length} символов)`);
+    await progress(job, {
       percent: 80,
-      step: `Digital PR: ${prMentioned} площадок. Генерируем рекомендации...`,
+      step: `llms.txt готов. Генерируем рекомендации...`,
     });
 
     // ═══════════════════════════════════════════════════════
@@ -227,6 +241,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
           scoreContent: analysis.scoreBreakdown.content,
           scoreAuthority: analysis.scoreBreakdown.authority,
           digitalPr: JSON.parse(JSON.stringify(digitalPrResults)),
+          generatedLlmsTxt: generatedLlmsTxt,
           // ── Unit Economics ──
           tokensUsed: usageAccumulator.totalTokens,
           llmCost: usageAccumulator.toJSON().estimatedCostUsd,
@@ -297,6 +312,7 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     console.log(`[Worker]    Score: ${analysis.overallScore}`);
     console.log(`[Worker]    SoV: ${mentionedCount}/${sovResults.length}`);
     console.log(`[Worker]    Рекомендаций: ${analysis.recommendations.length}`);
+    console.log(`[Worker]    llms.txt: ${generatedLlmsTxt.length} символов`);
     const usage = usageAccumulator.toJSON();
     console.log(`[Worker]    Токены: ${usage.totalTokens} (prompt: ${usage.promptTokens}, completion: ${usage.completionTokens})`);
     console.log(`[Worker]    LLM-стоимость: $${usage.estimatedCostUsd.toFixed(4)}`);

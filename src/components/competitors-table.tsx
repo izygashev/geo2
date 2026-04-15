@@ -11,9 +11,10 @@ interface Competitor {
 interface CompetitorsTableProps {
   competitors: Competitor[];
   isPro?: boolean; // true если пользователь на PRO/AGENCY плане
+  isPdf?: boolean; // true в print/export — показывает полный список без paywall
 }
 
-export function CompetitorsTable({ competitors, isPro = false }: CompetitorsTableProps) {
+export function CompetitorsTable({ competitors, isPro = false, isPdf = false }: CompetitorsTableProps) {
   if (competitors.length === 0) return null;
 
   // Считаем сколько раз каждый конкурент упоминался
@@ -37,9 +38,11 @@ export function CompetitorsTable({ competitors, isPro = false }: CompetitorsTabl
   const maxCount = sorted[0]?.count ?? 1;
 
   // FREE: показываем 3 чётко, остальные blur
+  // isPdf / isPro: показываем весь список без blur
   const FREE_VISIBLE_COUNT = 3;
-  const visibleItems = isPro ? sorted : sorted.slice(0, FREE_VISIBLE_COUNT);
-  const blurredItems = isPro ? [] : sorted.slice(FREE_VISIBLE_COUNT);
+  const showAll = isPro || isPdf;
+  const visibleItems = showAll ? sorted : sorted.slice(0, FREE_VISIBLE_COUNT);
+  const blurredItems = showAll ? [] : sorted.slice(FREE_VISIBLE_COUNT);
 
   return (
     <div className="space-y-3">
@@ -59,7 +62,7 @@ export function CompetitorsTable({ competitors, isPro = false }: CompetitorsTabl
                   href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 text-[#BBBBBB] hover:text-[#787774] transition-colors"
+                  className="shrink-0 text-[#BBBBBB] hover:text-[#787774] transition-colors print-hide"
                 >
                   <ExternalLink className="h-3 w-3" />
                 </a>

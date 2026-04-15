@@ -47,8 +47,11 @@ export async function GET(
   try {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({
-      viewport: { width: 1280, height: 900 },
+      viewport: { width: 1200, height: 900 },
     });
+
+    // Emulate print media so CSS @media print rules are applied
+    await page.emulateMedia({ media: "print" });
 
     await page.goto(printUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
@@ -60,7 +63,7 @@ export async function GET(
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "16mm", bottom: "16mm", left: "12mm", right: "12mm" },
+      margin: { top: "20mm", bottom: "16mm", left: "10mm", right: "10mm" },
       displayHeaderFooter: true,
       headerTemplate: `
         <div style="font-size:8px; color:#78776F; width:100%; padding:0 12mm; display:flex; justify-content:space-between;">

@@ -35,7 +35,7 @@ export function ScoreRing({ score, size = 180, strokeWidth = 10 }: ScoreRingProp
   const bg = getScoreBg(score);
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-3 print-avoid-break">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
           {/* Background circle */}

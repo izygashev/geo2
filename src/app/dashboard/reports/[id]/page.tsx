@@ -37,6 +37,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { VisibilityTrendChart } from "@/components/visibility-trend-chart-wrapper";
 import { ContentGaps, type ContentGapItem } from "@/components/content-gaps";
 import { RagVisualizer } from "@/components/ui/rag-visualizer";
+import { LlmsTxtBlock } from "@/components/llms-txt-block";
 
 export default async function ReportPage({
   params,
@@ -725,6 +726,26 @@ export default async function ReportPage({
               />
             );
           })()}
+
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SECTION: Generated llms.txt                        */}
+          {/* ═══════════════════════════════════════════════════ */}
+          {report.generatedLlmsTxt && (
+            <div>
+              <div className="mb-4 text-center">
+                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
+                  Визитка для нейросетей
+                </p>
+                <p className="mt-1 text-[11px] text-[#BBBBBB]">
+                  Готовый llms.txt — скопируйте и разместите на вашем сайте
+                </p>
+              </div>
+              <LlmsTxtBlock
+                content={report.generatedLlmsTxt}
+                siteUrl={report.project.url}
+              />
+            </div>
+          )}
 
           {/* ═══════════════════════════════════════════════════ */}
           {/* SECTION: Recommendations — Action Plan             */}

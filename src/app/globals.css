@@ -265,3 +265,49 @@
     animation-delay: calc(var(--index, 0) * 80ms);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Print — PDF optimization via Playwright / browser print
+   ═══════════════════════════════════════════════════════════ */
+@media print {
+  /* Force white background, no margins on body */
+  html, body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Remove all animations in print */
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Prevent cards and sections from splitting across pages */
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Force full width containers in print */
+  .print-full-width {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Hide interactive elements that make no sense in PDF */
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Force elements visible in print (e.g. collapsed accordions) */
+  .print-show {
+    display: block !important;
+  }
+}

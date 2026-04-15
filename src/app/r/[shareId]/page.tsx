@@ -6,6 +6,7 @@ import { SiteChecklist } from "@/components/site-checklist";
 import { SovDonutChart, SovBarChart } from "@/components/sov-charts";
 import { CompetitorsTable } from "@/components/competitors-table";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
+import { LlmsTxtBlock } from "@/components/llms-txt-block";
 
 export default async function SharedReportPage({
   params,
@@ -147,13 +148,21 @@ export default async function SharedReportPage({
             Топ AI-рекомендаций в нише
           </h2>
           {topCompetitors.length > 0 ? (
-            <CompetitorsTable competitors={topCompetitors} />
+            <CompetitorsTable competitors={topCompetitors} isPdf={true} />
           ) : (
             <p className="py-4 text-center text-sm text-[#787774]">
               AI-системы пока не определили конкурентов
             </p>
           )}
         </div>
+
+        {/* Generated llms.txt */}
+        {report.generatedLlmsTxt && (
+          <LlmsTxtBlock
+            content={report.generatedLlmsTxt}
+            siteUrl={report.project.url}
+          />
+        )}
 
         {/* Recommendations — Premium Panel */}
         {report.recommendations.length > 0 && (
