@@ -51,7 +51,7 @@ model User {
   email        String   @unique
   password     String
   plan         Plan     @default(FREE)
-  credits      Int      @default(50)
+  credits      Int      @default(10)
   authProvider String   @default("credentials") // "credentials" | "google"
   deletedAt    DateTime?                        // soft delete — сохраняем финансовую историю
   createdAt    DateTime @default(now())

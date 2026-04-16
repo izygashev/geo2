@@ -9,15 +9,9 @@
  * наличие /llms.txt, Schema.org (JSON-LD) данные.
  */
 
-import { chromium } from "playwright-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import { type Browser } from "playwright";
+import { chromium, type Browser } from "playwright";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
-
-// Apply stealth plugin — patches dozens of headless-detection vectors
-// (navigator.webdriver, chrome.runtime, WebGL vendor, etc.)
-chromium.use(StealthPlugin());
 
 // ─── Universal content extraction via Readability ───────
 /**

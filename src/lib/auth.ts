@@ -1,6 +1,8 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/lib/auth.config";
@@ -15,6 +17,7 @@ const SIGN_IN_IP_LIMIT = { maxRequests: 20, windowSeconds: 300 };
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
+    Google,
     Credentials({
       name: "credentials",
       credentials: {
@@ -72,4 +75,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  callbacks: {
+    ...authConfig.callbacks,
+    async signIn({ user, account }) {
+      if (account?.provider === "google" && user.email) {
+        const email = user.email.toLowerCase().trim();
+        const existing = await prisma.user.findUnique({ where: { email } });
+        if (!existing) {
+          const randomPassword = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 12);
+          const created = await prisma.user.create({
+            data: {
+              name: user.name || email.split("@")[0],
+              email,
+              password: randomPassword,
+              authProvider: "google",
+            },
+          });
+          user.id = created.id;
+        } else {
+          user.id = existing.id;
+          if (existing.authProvider !== "google") {
+            await prisma.user.update({ where: { id: existing.id }, data: { authProvider: "google" } });
+          }
+        }
+      }
+      return true;
+    },
+  },
 });

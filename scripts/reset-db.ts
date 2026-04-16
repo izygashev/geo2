@@ -17,7 +17,7 @@ async function main() {
   // Сбрасываем кредиты
   await prisma.user.updateMany({
     where: { email: "test@example.com" },
-    data: { credits: 50 },
+    data: { credits: 10 },
   });
 
   const users = await prisma.user.findMany({

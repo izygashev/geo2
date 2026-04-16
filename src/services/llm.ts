@@ -208,7 +208,7 @@ const KeywordsSchema = z.object({
       })
     )
     .min(1)
-    .max(10),
+    .max(20),
 });
 
 const SovResultSchema = z.object({
@@ -547,7 +547,7 @@ Return ONLY valid JSON, no explanations or markdown.`,
         },
         {
           role: "user",
-          content: `Analyze this website and generate 5 search queries:
+          content: `Analyze this website and generate 20 search queries:
 
 URL: ${siteData.url}
 Title: ${siteData.title}
@@ -563,7 +563,7 @@ Return JSON in this exact format:
   ]
 }
 
-Generate exactly 5 diverse queries: mix of informational, commercial, and navigational intent. Remember: always use the year ${currentYear}, never outdated years.`,
+Generate exactly 20 diverse queries: mix of informational, commercial, and navigational intent. Include brand-specific, category-level, comparison, and long-tail queries. Remember: always use the year ${currentYear}, never outdated years.`,
         },
       ],
       1000,
