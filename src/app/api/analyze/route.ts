@@ -69,9 +69,6 @@ export async function POST(request: NextRequest) {
     const url = normalizeUrl(body.url);
     const domain = new URL(url).hostname.replace(/^www\./, "");
 
-    // Пробуем модели по очереди (fallback chain)
-    let lastError: unknown = null;
-
     const systemPrompt = `You are a GEO (Generative Engine Optimization) expert. You analyze websites for their visibility in AI search engines (ChatGPT, Perplexity, Claude, Gemini).
 
 Given a website URL and domain, provide a quick AI-visibility audit.
@@ -104,118 +101,77 @@ Consider these aspects:
 
 Return the JSON analysis.`;
 
-    for (const model of FREE_MODELS) {
-      try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-            "X-Title": "Geo Studio",
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: 2000,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-          }),
-        });
+    // ── Параллельный вызов всех моделей (Promise.any) ──
+    const GLOBAL_TIMEOUT_MS = 15_000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GLOBAL_TIMEOUT_MS);
 
-        if (!response.ok) {
-          const errBody = await response.text();
-          console.error(`[Analyze] Model ${model} returned ${response.status}:`, errBody);
+    async function tryModel(model: string, signal: AbortSignal): Promise<AnalysisResponse> {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        signal,
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+          "X-Title": "Geo Studio",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 2000,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
 
-          // При rate limit — ждём и пробуем ту же модель ещё раз
-          if (response.status === 429) {
-            console.log(`[Analyze] Rate limited on ${model}, waiting 3s and retrying...`);
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-            const retry = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-                "X-Title": "Geo Studio",
-              },
-              body: JSON.stringify({
-                model,
-                max_tokens: 2000,
-                messages: [
-                  {
-                    role: "system",
-                    content: systemPrompt,
-                  },
-                  {
-                    role: "user",
-                    content: userPrompt,
-                  },
-                ],
-              }),
-            });
-            if (retry.ok) {
-              const retryData = await retry.json();
-              const retryText = retryData.choices?.[0]?.message?.content ?? "";
-              if (retryText) {
-                const retryJsonStr = extractJson(retryText);
-                const retryRepaired = repairJson(retryJsonStr);
-                const retryParsed = JSON.parse(retryRepaired) as AnalysisResponse;
-                if (typeof retryParsed.summary === "string" && Array.isArray(retryParsed.pros)) {
-                  retryParsed.score = Math.max(0, Math.min(100, Math.round(retryParsed.score)));
-                  retryParsed.url = domain;
-                  return NextResponse.json(retryParsed);
-                }
-              }
-            }
-          }
-
-          lastError = new Error(`${model}: HTTP ${response.status}`);
-          continue; // Пробуем следующую модель
-        }
-
-        const data = await response.json();
-        const rawText = data.choices?.[0]?.message?.content ?? "";
-
-        if (!rawText) {
-          lastError = new Error(`${model}: пустой ответ`);
-          continue;
-        }
-
-        const jsonStr = extractJson(rawText);
-        const repaired = repairJson(jsonStr);
-        const parsed = JSON.parse(repaired) as AnalysisResponse;
-
-        // Валидация базовой структуры
-        if (
-          typeof parsed.summary !== "string" ||
-          !Array.isArray(parsed.pros) ||
-          !Array.isArray(parsed.cons) ||
-          typeof parsed.score !== "number"
-        ) {
-          lastError = new Error(`${model}: невалидная структура JSON`);
-          continue;
-        }
-
-        // Нормализуем score
-        parsed.score = Math.max(0, Math.min(100, Math.round(parsed.score)));
-        parsed.url = domain;
-
-        return NextResponse.json(parsed);
-      } catch (err) {
-        console.error(`[Analyze] Ошибка с моделью ${model}:`, err);
-        lastError = err;
-        continue;
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error(`[Analyze] Model ${model} returned ${response.status}:`, errBody);
+        throw new Error(`${model}: HTTP ${response.status}`);
       }
+
+      const data = await response.json();
+      const rawText = data.choices?.[0]?.message?.content ?? "";
+      if (!rawText) throw new Error(`${model}: пустой ответ`);
+
+      const jsonStr = extractJson(rawText);
+      const repaired = repairJson(jsonStr);
+      const parsed = JSON.parse(repaired) as AnalysisResponse;
+
+      if (
+        typeof parsed.summary !== "string" ||
+        !Array.isArray(parsed.pros) ||
+        !Array.isArray(parsed.cons) ||
+        typeof parsed.score !== "number"
+      ) {
+        throw new Error(`${model}: невалидная структура JSON`);
+      }
+
+      parsed.score = Math.max(0, Math.min(100, Math.round(parsed.score)));
+      parsed.url = domain;
+      return parsed;
     }
 
-    // Все модели провалились
-    console.error("[Analyze] Все модели недоступны, последняя ошибка:", lastError);
-    return NextResponse.json(
-      { error: "AI-модели временно недоступны. Попробуйте через минуту." },
-      { status: 503 }
-    );
+    try {
+      const result = await Promise.any(
+        FREE_MODELS.map((model) => tryModel(model, controller.signal))
+      );
+      clearTimeout(timeout);
+      return NextResponse.json(result);
+    } catch (err) {
+      clearTimeout(timeout);
+      if (err instanceof AggregateError) {
+        console.error("[Analyze] Все модели недоступны:", err.errors.map((e: Error) => e.message));
+      } else {
+        console.error("[Analyze] Ошибка:", err);
+      }
+      return NextResponse.json(
+        { error: "AI-модели временно недоступны. Попробуйте через минуту." },
+        { status: 503 }
+      );
+    }
   } catch (error) {
     console.error("[Analyze] Ошибка:", error);
     return NextResponse.json(

@@ -194,15 +194,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3.5 Проверяем лимит проектов
-    const projectCount = await prisma.project.count({
-      where: { userId: session.user.id },
-    });
-
-    const existingProject = await prisma.project.findFirst({
-      where: { userId: session.user.id, url: normalizedUrl },
-      select: { id: true, url: true, name: true },
-    });
+    // 3.5 Проверяем лимит проектов + concurrent reports + существующий проект (параллельно)
+    const [projectCount, existingProject, processingCount] = await Promise.all([
+      prisma.project.count({
+        where: { userId: session.user.id },
+      }),
+      prisma.project.findFirst({
+        where: { userId: session.user.id, url: normalizedUrl },
+        select: { id: true, url: true, name: true },
+      }),
+      prisma.report.count({
+        where: {
+          project: { userId: session.user.id },
+          status: "PROCESSING",
+        },
+      }),
+    ]);
 
     if (!existingProject && projectCount >= limits.maxProjects) {
       return NextResponse.json(
@@ -212,13 +219,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 3.6 Проверяем concurrent PROCESSING отчётов
-    const processingCount = await prisma.report.count({
-      where: {
-        project: { userId: session.user.id },
-        status: "PROCESSING",
-      },
-    });
-
     if (processingCount >= limits.maxConcurrentReports) {
       return NextResponse.json(
         { error: `Вы уже обрабатываете ${processingCount} отчёт(ов). Дождитесь завершения.` },

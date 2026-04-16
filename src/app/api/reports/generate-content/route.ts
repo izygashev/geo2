@@ -153,19 +153,49 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = getClient();
-    const response = await client.chat.completions.create({
-      model: CLAUDE_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 4096,
-      temperature: 0.7,
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000); // 60s hard timeout
+
+    const stream = await client.chat.completions.create(
+      {
+        model: CLAUDE_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 4096,
+        temperature: 0.7,
+        stream: true,
+      },
+      { signal: controller.signal }
+    );
+
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(ctrl) {
+        try {
+          for await (const chunk of stream) {
+            const text = chunk.choices?.[0]?.delta?.content;
+            if (text) {
+              ctrl.enqueue(encoder.encode(text));
+            }
+          }
+        } catch (err) {
+          console.error("[generate-content] Stream error:", err);
+        } finally {
+          clearTimeout(timeout);
+          ctrl.close();
+        }
+      },
     });
 
-    const content = response.choices?.[0]?.message?.content ?? "";
-
-    return NextResponse.json({ content });
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Transfer-Encoding": "chunked",
+      },
+    });
   } catch (error) {
     console.error("[generate-content] Error:", error);
     return NextResponse.json(

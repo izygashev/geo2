@@ -15,27 +15,28 @@ export default async function ProjectSettingsPage({
 
   const { id } = await params;
 
-  const project = await prisma.project.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      url: true,
-      competitorUrls: true,
-      brandLogoUrl: true,
-      brandAccentColor: true,
-      userId: true,
-    },
-  });
+  const [project, user] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        competitorUrls: true,
+        brandLogoUrl: true,
+        brandAccentColor: true,
+        userId: true,
+      },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { plan: true },
+    }),
+  ]);
 
   if (!project || project.userId !== session.user.id) {
     notFound();
   }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { plan: true },
-  });
 
   const competitorUrls = Array.isArray(project.competitorUrls)
     ? (project.competitorUrls as string[])

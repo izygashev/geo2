@@ -66,20 +66,26 @@ export default async function ReportPage({
     redirect("/dashboard");
   }
 
-  // История Score по проекту (для тренд-графика)
-  const scoreHistory = await prisma.report.findMany({
-    where: {
-      projectId: report.projectId,
-      status: "COMPLETED",
-      overallScore: { not: null },
-    },
-    orderBy: { createdAt: "asc" },
-    select: {
-      id: true,
-      overallScore: true,
-      createdAt: true,
-    },
-  });
+  // История Score + план пользователя (параллельно — оба зависят только от session/report)
+  const [scoreHistory, currentUser] = await Promise.all([
+    prisma.report.findMany({
+      where: {
+        projectId: report.projectId,
+        status: "COMPLETED",
+        overallScore: { not: null },
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        overallScore: true,
+        createdAt: true,
+      },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { plan: true },
+    }),
+  ]);
 
   const historyData = scoreHistory.map((r) => ({
     date: r.createdAt.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }),
@@ -87,11 +93,6 @@ export default async function ReportPage({
     reportId: r.id,
   }));
 
-  // План пользователя (для paywall)
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { plan: true },
-  });
   const isPro = currentUser?.plan === "PRO" || currentUser?.plan === "AGENCY";
 
   // Найдём предыдущий отчёт по этому проекту для кнопки "Сравнить"

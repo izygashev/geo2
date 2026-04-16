@@ -66,8 +66,22 @@ export function ContentGaps({ gaps, projectUrl, siteTitle }: ContentGapsProps) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
-      const data = await res.json();
-      setGeneratedContent(data.content || "Контент не был сгенерирован.");
+      // Stream the response text chunk-by-chunk
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No response body");
+
+      let accumulated = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setGeneratedContent(accumulated);
+      }
+
+      if (!accumulated) {
+        setGeneratedContent("Контент не был сгенерирован.");
+      }
     } catch (err) {
       console.error("Generate error:", err);
       setError(

@@ -13,28 +13,26 @@ export default async function BillingPage() {
     redirect("/sign-in");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { credits: true, plan: true },
-  });
+  const [user, activeSubscription, payments] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { credits: true, plan: true },
+    }),
+    prisma.subscription.findFirst({
+      where: {
+        userId: session.user.id,
+        status: "ACTIVE",
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.payment.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+  ]);
 
   if (!user) redirect("/sign-in");
-
-  // Активная подписка
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      userId: session.user.id,
-      status: "ACTIVE",
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  // История платежей (последние 10)
-  const payments = await prisma.payment.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
 
   const planLabels: Record<string, string> = {
     FREE: "Free",

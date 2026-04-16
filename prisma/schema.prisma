@@ -137,6 +137,9 @@ model Report {
   // ─── Generated llms.txt for the user ────────────────
   generatedLlmsTxt String? @db.Text      // Персонализированный llms.txt для сайта клиента
 
+  // ─── PDF cache ──────────────────────────────────────
+  pdfFile          Bytes?                // Сгенерированный PDF (кешируется до следующего отчёта)
+
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   shareOfVoices   ShareOfVoice[]
   recommendations Recommendation[]

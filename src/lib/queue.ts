@@ -13,3 +13,13 @@ export const reportQueue = new Queue("report-generation", {
     removeOnFail: { count: 500 },      // Храним последние 500 упавших
   },
 });
+
+export const pdfQueue = new Queue("pdf-generation", {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: "exponential", delay: 2000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 100 },
+  },
+});

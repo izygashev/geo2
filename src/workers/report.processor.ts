@@ -105,26 +105,40 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
       return;
     }
 
+    const SOV_BATCH_SIZE = 3;
     const sovResults: SovCheckResult[] = [];
-    for (let i = 0; i < keywords.length; i++) {
-      const kw = keywords[i];
-      console.log(`[Worker]    [${i + 1}/${keywords.length}] "${kw.query}"`);
 
-      await progress(job, {
-        percent: Math.round(35 + (40 / keywords.length) * i),
-        step: `Проверяем запрос ${i + 1} из ${keywords.length}: «${kw.query}»`,
+    for (let batchStart = 0; batchStart < keywords.length; batchStart += SOV_BATCH_SIZE) {
+      const batch = keywords.slice(batchStart, batchStart + SOV_BATCH_SIZE);
+
+      // Логируем + обновляем прогресс для первого элемента батча
+      batch.forEach((kw, j) => {
+        const idx = batchStart + j;
+        console.log(`[Worker]    [${idx + 1}/${keywords.length}] "${kw.query}"`);
       });
 
-      if (multiLlm) {
-        const multiResults = await checkShareOfVoiceMultiLlm(kw.query, projectUrl, usageAccumulator);
-        sovResults.push(...multiResults);
-      } else {
-        const result = await checkShareOfVoice(kw.query, projectUrl, usageAccumulator);
-        sovResults.push(result);
+      await progress(job, {
+        percent: Math.round(35 + (40 / keywords.length) * batchStart),
+        step: `Проверяем запросы ${batchStart + 1}–${Math.min(batchStart + SOV_BATCH_SIZE, keywords.length)} из ${keywords.length}`,
+      });
+
+      const batchResults = await Promise.all(
+        batch.map(async (kw) => {
+          if (multiLlm) {
+            return checkShareOfVoiceMultiLlm(kw.query, projectUrl, usageAccumulator);
+          } else {
+            const result = await checkShareOfVoice(kw.query, projectUrl, usageAccumulator);
+            return [result];
+          }
+        })
+      );
+
+      for (const results of batchResults) {
+        sovResults.push(...results);
       }
 
-      // Пауза между запросами
-      if (i < keywords.length - 1) {
+      // Пауза между батчами (не после последнего)
+      if (batchStart + SOV_BATCH_SIZE < keywords.length) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
     }
@@ -139,31 +153,23 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     });
 
     // ═══════════════════════════════════════════════════════
-    // ШАГ 4: Digital PR — упоминания на площадках (Sonar)
+    // ШАГ 4 + 4.5: Digital PR + llms.txt (параллельно)
     // ═══════════════════════════════════════════════════════
-    console.log(`[Worker] ── Шаг 4/5: Digital PR ──`);
+    console.log(`[Worker] ── Шаг 4/5: Digital PR + llms.txt (параллельно) ──`);
 
     const brandName = siteData.title || new URL(projectUrl).hostname.replace("www.", "");
-    const digitalPrResults = await checkDigitalPr(projectUrl, brandName, usageAccumulator);
+
+    const [digitalPrResults, generatedLlmsTxt] = await Promise.all([
+      checkDigitalPr(projectUrl, brandName, usageAccumulator),
+      generateLlmsTxt(siteData, sovResults, usageAccumulator),
+    ]);
 
     const prMentioned = digitalPrResults.filter((m) => m.mentioned).length;
     console.log(`[Worker] ✅ Digital PR: ${prMentioned}/${digitalPrResults.length} площадок`);
-    await progress(job, {
-      percent: 75,
-      step: `Digital PR: ${prMentioned} площадок. Генерируем llms.txt...`,
-    });
-
-    // ═══════════════════════════════════════════════════════
-    // ШАГ 4.5: Генерация персонализированного llms.txt
-    // ═══════════════════════════════════════════════════════
-    console.log(`[Worker] ── Шаг 4.5: Генерация llms.txt ──`);
-
-    const generatedLlmsTxt = await generateLlmsTxt(siteData, sovResults, usageAccumulator);
-
     console.log(`[Worker] ✅ llms.txt сгенерирован (${generatedLlmsTxt.length} символов)`);
     await progress(job, {
       percent: 80,
-      step: `llms.txt готов. Генерируем рекомендации...`,
+      step: `Digital PR: ${prMentioned} площадок, llms.txt готов. Генерируем рекомендации...`,
     });
 
     // ═══════════════════════════════════════════════════════

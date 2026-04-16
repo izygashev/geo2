@@ -12,12 +12,15 @@
 import { Worker, Job } from "bullmq";
 import { redisConnection } from "@/lib/redis";
 import { processReport } from "../workers/report.processor";
+import { processPdf, PdfJobData } from "../workers/pdf.processor";
 import { sendTelegramAlert, formatJobFailedAlert, formatJobStalledAlert } from "@/lib/telegram";
 
 let workerInstance: Worker | null = null;
+let pdfWorkerInstance: Worker | null = null;
 
 // В dev-режиме hot-reload пересоздаёт модули → храним в globalThis
 const globalKey = Symbol.for("geo_worker_instance");
+const pdfGlobalKey = Symbol.for("geo_pdf_worker_instance");
 const g = globalThis as unknown as Record<symbol, Worker | null>;
 
 /**
@@ -76,4 +79,52 @@ export function ensureWorkerRunning(): void {
 
   workerInstance = worker;
   g[globalKey] = worker;
+}
+
+/**
+ * Гарантирует, что PDF-воркер запущен.
+ */
+export function ensurePdfWorkerRunning(): void {
+  if (g[pdfGlobalKey]) {
+    pdfWorkerInstance = g[pdfGlobalKey];
+    return;
+  }
+  if (pdfWorkerInstance) return;
+
+  console.log("[WorkerManager] 🖨️ Запускаю inline BullMQ PDF worker...");
+
+  const worker = new Worker(
+    "pdf-generation",
+    async (job: Job<PdfJobData>) => {
+      return processPdf(job);
+    },
+    {
+      connection: redisConnection,
+      concurrency: 1,
+      lockDuration: 120_000,
+      stalledInterval: 60_000,
+    }
+  );
+
+  worker.on("ready", () => {
+    console.log("[WorkerManager] ⚡ PDF Worker запущен и слушает очередь 'pdf-generation'");
+  });
+
+  worker.on("completed", (job) => {
+    console.log(`[WorkerManager] ✅ PDF Job ${job.id} завершён`);
+  });
+
+  worker.on("failed", (job, err) => {
+    console.error(`[WorkerManager] ❌ PDF Job ${job?.id} упал: ${err.message}`);
+    sendTelegramAlert(
+      formatJobFailedAlert(job?.id, job?.name, err, job?.attemptsMade, job?.opts.attempts)
+    );
+  });
+
+  worker.on("error", (err) => {
+    console.error("[WorkerManager] PDF Worker ошибка:", err);
+  });
+
+  pdfWorkerInstance = worker;
+  g[pdfGlobalKey] = worker;
 }
