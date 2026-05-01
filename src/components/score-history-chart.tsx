@@ -58,7 +58,8 @@ export function ScoreHistoryChart({ data }: ScoreHistoryChartProps) {
         )}
       </div>
 
-      <ResponsiveContainer width="100%" height={180}>
+      <div className="h-[180px] min-h-[180px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={data}
           margin={{ left: 0, right: 10, top: 5, bottom: 0 }}
@@ -115,6 +116,7 @@ export function ScoreHistoryChart({ data }: ScoreHistoryChartProps) {
           />
         </LineChart>
       </ResponsiveContainer>
+      </div>
 
       <p className="mt-3 text-xs text-[#BBBBBB] text-center">
         {data.length} {data.length === 1 ? "отчёт" : data.length < 5 ? "отчёта" : "отчётов"} за всё время

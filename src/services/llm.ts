@@ -208,7 +208,7 @@ const KeywordsSchema = z.object({
       })
     )
     .min(1)
-    .max(20),
+    .max(7),
 });
 
 const SovResultSchema = z.object({
@@ -263,11 +263,11 @@ const LlmsTxtSchema = z.object({
   niche: z.string(),
   problemStatement: z.string(),
   competitiveAdvantage: z.string(),
-  targetAudience: z.array(z.string()).min(1),
-  useCases: z.array(z.string()).min(1),
-  features: z.array(z.string()).min(1),
-  faq: z.array(z.object({ question: z.string(), answer: z.string() })).min(1),
-  contacts: z.array(z.object({ label: z.string(), value: z.string() })).min(1),
+  targetAudience: z.array(z.string()).optional().default([]),
+  useCases: z.array(z.string()).optional().default([]),
+  features: z.array(z.string()).optional().default([]),
+  faq: z.array(z.object({ question: z.string(), answer: z.string() })).optional().default([]),
+  contacts: z.array(z.object({ label: z.string(), value: z.string() })).optional().default([]),
 });
 
 // ─── Типы ────────────────────────────────────────────────
@@ -547,7 +547,7 @@ Return ONLY valid JSON, no explanations or markdown.`,
         },
         {
           role: "user",
-          content: `Analyze this website and generate 20 search queries:
+          content: `Analyze this website and generate 7 search queries:
 
 URL: ${siteData.url}
 Title: ${siteData.title}
@@ -563,7 +563,7 @@ Return JSON in this exact format:
   ]
 }
 
-Generate exactly 20 diverse queries: mix of informational, commercial, and navigational intent. Include brand-specific, category-level, comparison, and long-tail queries. Remember: always use the year ${currentYear}, never outdated years.`,
+Generate exactly 7 diverse queries: mix of informational, commercial, and navigational intent. Include brand-specific, category-level, comparison, and long-tail queries. Remember: always use the year ${currentYear}, never outdated years.`,
         },
       ],
       1000,
@@ -605,32 +605,22 @@ export async function checkShareOfVoice(
       [
         {
           role: "system",
-          content: `You are a helpful AI assistant. The user asks a question. You must:
-
+          content: `You are a strict JSON-only API. The user asks a question. You must:
 1. Identify the category/niche the question relates to.
 2. Answer the question naturally, recommending the top 5-10 best services/products/companies in this niche. Be specific — list REAL companies with real URLs.
 3. After answering, self-analyze: did you mention "${domain}" in your recommendations?
 4. If you mentioned "${domain}", evaluate the sentiment of your mention (positive/neutral/negative).
 
-Return ONLY valid JSON (no markdown, no extra text) in this exact format:
+Return ONLY valid JSON. Absolutely NO markdown formatting (\`\`\`json), NO introductory text, NO explanations. Start immediately with '{' and end with '}'. Exact format required:
 {
-  "categorySearched": "the niche/category you identified (e.g. 'SEO-оптимизация', 'CRM-системы')",
-  "isMentioned": true/false,
-  "mentionContext": "exact sentence where you mentioned ${domain}, or empty string if not mentioned",
+  "categorySearched": "string",
+  "isMentioned": boolean,
+  "mentionContext": "string or empty",
   "sentiment": "positive" | "neutral" | "negative",
   "competitors": [
-    { "name": "Company Name", "url": "https://example.com", "rank": 1 },
-    { "name": "Another Company", "url": "https://another.com", "rank": 2 }
+    { "name": "Company Name", "url": "https://example.com", "rank": 1 }
   ]
-}
-
-CRITICAL RULES:
-- "competitors" MUST contain 5-10 REAL companies/services that are actual leaders in this niche
-- Each competitor MUST have a "rank" (1 = top recommendation)
-- Include "${domain}" in competitors list if you would genuinely recommend it
-- "isMentioned" = true ONLY if "${domain}" appears in your competitors list
-- If "isMentioned" is false, "sentiment" should be omitted or null
-- Be honest — do not fabricate mentions. If you don't know "${domain}", say so.`,
+}`,
         },
         {
           role: "user",
@@ -696,30 +686,22 @@ export async function checkShareOfVoiceMultiLlm(
         [
           {
             role: "system",
-            content: `You are a helpful AI assistant. The user asks a question. You must:
-
+            content: `You are a strict JSON-only API. The user asks a question. You must:
 1. Identify the category/niche the question relates to.
 2. Answer the question naturally, recommending the top 5-10 best services/products/companies in this niche. Be specific — list REAL companies with real URLs.
 3. After answering, self-analyze: did you mention "${domain}" in your recommendations?
 4. If you mentioned "${domain}", evaluate the sentiment of your mention (positive/neutral/negative).
 
-Return ONLY valid JSON (no markdown, no extra text) in this exact format:
+Return ONLY valid JSON. Absolutely NO markdown formatting (\`\`\`json), NO introductory text, NO explanations. Start immediately with '{' and end with '}'. Exact format required:
 {
-  "categorySearched": "the niche/category you identified",
-  "isMentioned": true/false,
-  "mentionContext": "exact sentence where you mentioned ${domain}, or empty string",
+  "categorySearched": "string",
+  "isMentioned": boolean,
+  "mentionContext": "string or empty",
   "sentiment": "positive" | "neutral" | "negative",
   "competitors": [
     { "name": "Company Name", "url": "https://example.com", "rank": 1 }
   ]
-}
-
-CRITICAL RULES:
-- "competitors" MUST contain 5-10 REAL companies that are actual leaders in this niche
-- Each competitor MUST have a "rank" (1 = top recommendation)
-- Include "${domain}" in competitors list if you would genuinely recommend it
-- "isMentioned" = true ONLY if "${domain}" appears in your competitors list
-- Be honest — do not fabricate mentions.`,
+}`,
           },
           {
             role: "user",

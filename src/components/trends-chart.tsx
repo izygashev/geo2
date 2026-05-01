@@ -37,7 +37,8 @@ export function TrendsChart({ data, projectNames }: TrendsChartProps) {
       <h2 className="mb-5 text-xs font-medium uppercase tracking-[0.1em] text-[#787774]">
         Динамика Score по проектам
       </h2>
-      <ResponsiveContainer width="100%" height={280}>
+      <div className="h-[280px] min-h-[280px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ left: 0, right: 10, top: 5, bottom: 0 }}>
           <XAxis
             dataKey="date"
@@ -80,6 +81,7 @@ export function TrendsChart({ data, projectNames }: TrendsChartProps) {
           ))}
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

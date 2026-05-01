@@ -114,7 +114,8 @@ export function SovBarChart({ items }: SovBarProps) {
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <div className="h-[200px] min-h-[200px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} barSize={28}>
         <XAxis
           dataKey="label"
@@ -141,5 +142,6 @@ export function SovBarChart({ items }: SovBarProps) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 }
