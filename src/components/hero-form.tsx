@@ -218,6 +218,12 @@ export function HeroForm({ isAuthenticated }: HeroFormProps) {
           </p>
         )}
 
+        {isAuthenticated && !isLoading && !activeReportId && !analysisResult && (
+          <p className="mt-2 text-center text-[11px] text-[#CCCCCC]">
+            Анализ может занимать до 10 минут
+          </p>
+        )}
+
         {error && (
           <p className="mt-2 text-xs text-red-500/80">{error}</p>
         )}

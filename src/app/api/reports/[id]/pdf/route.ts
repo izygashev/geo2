@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { pdfQueue } from "@/lib/queue";
 import { ensurePdfWorkerRunning } from "@/lib/worker-manager";
+import { PDF_JOB_OPTIONS } from "@/workers/pdf.processor";
 import crypto from "crypto";
 
 export async function POST(
@@ -53,9 +54,9 @@ export async function POST(
     reportId,
     projectName: report.project.name,
     printUrl,
-  });
+  }, PDF_JOB_OPTIONS);
 
-  return NextResponse.json({ jobId: job.id, ready: false });
+  return NextResponse.json({ jobId: job.id, ready: false }, { status: 202 });
 }
 
 export async function GET(

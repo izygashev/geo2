@@ -40,13 +40,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         } catch {
           // headers() may fail outside request context
         }
-        const ipRl = checkRateLimit(`signin-ip:${clientIp}`, SIGN_IN_IP_LIMIT);
+        const ipRl = await checkRateLimit(`signin-ip:${clientIp}`, SIGN_IN_IP_LIMIT);
         if (!ipRl.allowed) {
           throw new Error("Слишком много попыток входа с вашего адреса. Подождите 5 минут.");
         }
 
         // --- Per-email rate limit (single-account brute-force protection) ---
-        const emailRl = checkRateLimit(`signin:${email}`, SIGN_IN_EMAIL_LIMIT);
+        const emailRl = await checkRateLimit(`signin:${email}`, SIGN_IN_EMAIL_LIMIT);
         if (!emailRl.allowed) {
           throw new Error("Слишком много попыток входа. Подождите минуту.");
         }

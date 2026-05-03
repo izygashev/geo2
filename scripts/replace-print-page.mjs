@@ -1,4 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { writeFileSync } from "fs";
+
+const content = `import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import {
   Globe,
@@ -16,7 +18,7 @@ import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { LlmsTxtBlock } from "@/components/llms-txt-block";
 import { RagVisualizer } from "@/components/ui/rag-visualizer";
 import { ContentGaps } from "@/components/content-gaps";
-import { VisibilityTrendChart } from "@/components/visibility-trend-chart-wrapper";
+import { VisibilityTrendChartWrapper } from "@/components/visibility-trend-chart-wrapper";
 import type { DigitalPrMention } from "@/services/llm";
 
 export default async function PrintReportPage({
@@ -50,7 +52,7 @@ export default async function PrintReportPage({
     : [];
 
   const digitalPr = Array.isArray(report.digitalPr)
-    ? (report.digitalPr as unknown as DigitalPrMention[])
+    ? (report.digitalPr as DigitalPrMention[])
     : [];
 
   const recommendedSov = report.shareOfVoices.filter((s) => s.isMentioned);
@@ -99,7 +101,7 @@ export default async function PrintReportPage({
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div className="avoid-break rounded-xl border border-[#EAEAEA] p-6">
               <h3 className="text-sm font-semibold mb-4">Динамика видимости</h3>
-              <VisibilityTrendChart currentScore={report.overallScore ?? 0} createdAt={report.createdAt.toISOString()} />
+              <VisibilityTrendChartWrapper currentScore={report.overallScore ?? 0} createdAt={report.createdAt.toISOString()} />
             </div>
             <div className="avoid-break rounded-xl border border-[#EAEAEA] p-6">
               <h3 className="text-sm font-semibold mb-4">Главные конкуренты</h3>
@@ -198,7 +200,7 @@ export default async function PrintReportPage({
         </section>
       </main>
 
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{__html: \`
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .print-section { margin-bottom: 2rem; }
@@ -206,7 +208,11 @@ export default async function PrintReportPage({
           .avoid-break { page-break-inside: avoid; }
           [data-state="closed"] { display: block !important; height: auto !important; overflow: visible !important; }
         }
-      `}} />
+      \`}} />
     </div>
   );
 }
+`;
+
+writeFileSync("src/app/print/report/[id]/page.tsx", content, "utf8");
+console.log("OK, lines:", content.split("\n").length);

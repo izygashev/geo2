@@ -16,6 +16,7 @@ import {
   generateRecommendations,
   checkDigitalPr,
   generateLlmsTxt,
+  generateFaqContent,
   LlmUsageAccumulator,
   type SovCheckResult,
 } from "@/services/llm";
@@ -159,14 +160,16 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
 
     const brandName = siteData.title || new URL(projectUrl).hostname.replace("www.", "");
 
-    const [digitalPrResults, generatedLlmsTxt] = await Promise.all([
+    const [digitalPrResults, generatedLlmsTxt, generatedFaqCode] = await Promise.all([
       checkDigitalPr(projectUrl, brandName, usageAccumulator),
       generateLlmsTxt(siteData, sovResults, usageAccumulator),
+      generateFaqContent(siteData, usageAccumulator),
     ]);
 
     const prMentioned = digitalPrResults.filter((m) => m.mentioned).length;
     console.log(`[Worker] ✅ Digital PR: ${prMentioned}/${digitalPrResults.length} площадок`);
     console.log(`[Worker] ✅ llms.txt сгенерирован (${generatedLlmsTxt.length} символов)`);
+    console.log(`[Worker] ✅ FAQ сгенерирован (${generatedFaqCode.length} символов)`);
     await progress(job, {
       percent: 80,
       step: `Digital PR: ${prMentioned} площадок, llms.txt готов. Генерируем рекомендации...`,
@@ -185,6 +188,13 @@ export async function processReport(job: Job<ReportJobData>): Promise<void> {
     }
 
     const analysis = await generateRecommendations(siteData, sovResults, usageAccumulator);
+
+    // Подменяем generatedCode для schema-faq на реальный сгенерированный контент
+    for (const rec of analysis.recommendations) {
+      if (rec.type === "schema-faq") {
+        rec.generatedCode = generatedFaqCode;
+      }
+    }
 
     console.log(`[Worker] ✅ Score: ${analysis.overallScore}, рекомендаций: ${analysis.recommendations.length}`);
     await progress(job, { percent: 90, step: "Сохраняем результаты..." });

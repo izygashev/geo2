@@ -8,6 +8,8 @@
 
 import OpenAI from "openai";
 import { z } from "zod";
+import { createHash } from "crypto";
+import Redis from "ioredis";
 import type { SiteData } from "./scraper";
 import { extractJson, repairJson } from "../lib/json-utils";
 import { getLlmsTxtGenerationPrompt, buildLlmsTxt } from "../lib/templates/llms-template";
@@ -92,6 +94,60 @@ function getClient(): OpenAI {
     });
   }
   return _openrouter;
+}
+
+// ─── Redis LLM Cache ────────────────────────────────────
+let _redis: Redis | null = null;
+
+function getLlmRedis(): Redis | null {
+  if (_redis) return _redis;
+  try {
+    _redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+      maxRetriesPerRequest: 1,
+      connectTimeout: 2_000,
+      lazyConnect: false,
+      enableOfflineQueue: false,
+    });
+    _redis.on("error", () => { /* silently absorbed — we fail-open */ });
+    return _redis;
+  } catch {
+    return null;
+  }
+}
+
+const LLM_CACHE_TTL = 48 * 60 * 60; // 48 hours in seconds
+
+/**
+ * Generates a deterministic SHA-256 cache key from the messages array.
+ * The key includes the model name so different models never share the same cache entry.
+ */
+function buildCacheKey(
+  messages: { role: string; content: string }[],
+  model: string
+): string {
+  const payload = JSON.stringify({ model, messages });
+  const hash = createHash("sha256").update(payload).digest("hex");
+  return `llm:cache:${hash}`;
+}
+
+async function getCachedResponse(key: string): Promise<string | null> {
+  try {
+    const redis = getLlmRedis();
+    if (!redis || redis.status === "end" || redis.status === "close") return null;
+    return await redis.get(key);
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedResponse(key: string, value: string): Promise<void> {
+  try {
+    const redis = getLlmRedis();
+    if (!redis || redis.status === "end" || redis.status === "close") return;
+    await redis.set(key, value, "EX", LLM_CACHE_TTL);
+  } catch {
+    // Cache write failure is non-fatal
+  }
 }
 
 // ─── Модели ─────────────────────────────────────────────
@@ -265,8 +321,15 @@ const LlmsTxtSchema = z.object({
   competitiveAdvantage: z.string(),
   targetAudience: z.array(z.string()).optional().default([]),
   useCases: z.array(z.string()).optional().default([]),
+  howItWorks: z.array(z.string()).optional().default([]),
   features: z.array(z.string()).optional().default([]),
+  comparisonTable: z.object({
+    competitor: z.string(),
+    rows: z.array(z.object({ aspect: z.string(), them: z.string(), us: z.string() })),
+  }).optional().nullable(),
+  pricing: z.array(z.object({ name: z.string(), price: z.string(), description: z.string() })).optional().default([]),
   faq: z.array(z.object({ question: z.string(), answer: z.string() })).optional().default([]),
+  teamOrFounder: z.string().optional().nullable(),
   contacts: z.array(z.object({ label: z.string(), value: z.string() })).optional().default([]),
 });
 
@@ -327,6 +390,38 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 const API_TIMEOUT = 180_000; // 180 секунд — Sonar Pro Search делает multi-step
 
 async function callWithFallback(
+  messages: { role: "system" | "user"; content: string }[],
+  maxTokens: number,
+  primaryModel: string = CLAUDE_MODEL,
+  usageAccumulator?: LlmUsageAccumulator,
+): Promise<string> {
+  // ── Redis LLM cache (cache-aside) ──────────────────────
+  // Key includes the primary model so model switches don't serve stale responses.
+  // Perplexity (Sonar) is excluded because it performs live web searches —
+  // caching those would return outdated SoV results.
+  const isSonar = primaryModel.includes("sonar") || primaryModel.includes("perplexity");
+  const cacheKey = isSonar ? null : buildCacheKey(messages, primaryModel);
+
+  if (cacheKey) {
+    const cached = await getCachedResponse(cacheKey);
+    if (cached) {
+      console.log(`[LLM] ⚡ Cache hit for model=${primaryModel} key=${cacheKey.slice(-8)}`);
+      return cached;
+    }
+  }
+
+  // ── Cache miss — call the API ──────────────────────────
+  const result = await callWithFallbackUncached(messages, maxTokens, primaryModel, usageAccumulator);
+
+  if (cacheKey && result) {
+    await setCachedResponse(cacheKey, result);
+    console.log(`[LLM] 💾 Cached response for model=${primaryModel} key=${cacheKey.slice(-8)}`);
+  }
+
+  return result;
+}
+
+async function callWithFallbackUncached(
   messages: { role: "system" | "user"; content: string }[],
   maxTokens: number,
   primaryModel: string = CLAUDE_MODEL,
@@ -1134,7 +1229,103 @@ Return exactly ${DIGITAL_PR_PLATFORMS.length} entries, one per platform: ${platf
 }
 
 // ═══════════════════════════════════════════════════════════
-// 5. Генерация персонализированного llms.txt для сайта клиента
+// 5а. Генерация FAQ-контента (вопросы-ответы по сайту)
+// ═══════════════════════════════════════════════════════════
+
+const FaqSchema = z.object({
+  questions: z.array(
+    z.object({
+      question: z.string(),
+      answer: z.string(),
+    })
+  ).min(5).max(10),
+});
+
+export async function generateFaqContent(
+  siteData: SiteData,
+  usageAccumulator?: LlmUsageAccumulator,
+): Promise<string> {
+  console.log(`[LLM] ❓ Генерирую FAQ для ${siteData.url}`);
+
+  const prompt = `You are a copywriter specializing in FAQ pages optimized for AI assistants.
+
+Website data:
+- URL: ${siteData.url}
+- Title: ${siteData.title}
+- Description: ${siteData.description}
+- Content: ${siteData.bodyText.slice(0, 8000)}
+
+Generate 7-10 realistic FAQ questions and answers that real users ask about this business/service.
+Questions must be specific to THIS site's actual services, prices, locations, and features — not generic.
+Write answers in the same language as the site content.
+Each answer should be 2-4 sentences, factual, and directly answerable from the content.
+
+Return ONLY valid JSON:
+{
+  "questions": [
+    { "question": "...", "answer": "..." }
+  ]
+}`;
+
+  try {
+    const parsed = await callLlmWithRetry(
+      [
+        { role: "system", content: "You are a FAQ copywriter. Return ONLY valid JSON." },
+        { role: "user", content: prompt },
+      ],
+      1500,
+      FaqSchema,
+      CLAUDE_SONNET_MODEL,
+      usageAccumulator,
+    );
+
+    const mainEntity = parsed.questions.map((q) => ({
+      "@type": "Question",
+      name: q.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: q.answer,
+      },
+    }));
+
+    const schemaCode = `<script type="application/ld+json">
+${JSON.stringify(
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity,
+  },
+  null,
+  2
+)}
+</script>`;
+
+    console.log(`[LLM] ✅ FAQ сгенерирован: ${parsed.questions.length} вопросов`);
+    return schemaCode;
+  } catch (error) {
+    console.error("[LLM] ❌ Ошибка генерации FAQ:", error);
+    // Fallback: минимальный FAQ из имеющихся данных
+    return `<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Что такое ${siteData.title}?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "${(siteData.description || "Информация о компании").replace(/"/g, '\\"')}"
+      }
+    }
+  ]
+}
+</script>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 5б. Генерация персонализированного llms.txt для сайта клиента
 // ═══════════════════════════════════════════════════════════
 export async function generateLlmsTxt(
   siteData: SiteData,
@@ -1157,7 +1348,7 @@ export async function generateLlmsTxt(
     siteData.url,
     siteData.title,
     siteData.description,
-    siteData.bodyText.slice(0, 10000),
+    siteData.bodyText.slice(0, 15000),
     siteData.schemaOrgTypes,
     categories[0] ?? null,
     competitorNames,
@@ -1169,7 +1360,7 @@ export async function generateLlmsTxt(
         { role: "system", content: "You are a GEO (Generative Engine Optimization) expert. Return ONLY valid JSON." },
         { role: "user", content: prompt },
       ],
-      2000,
+      6000,
       LlmsTxtSchema,
       CLAUDE_SONNET_MODEL,
       usageAccumulator,
@@ -1178,6 +1369,8 @@ export async function generateLlmsTxt(
     const llmsTxt = buildLlmsTxt({
       ...parsed,
       url: siteData.url,
+      comparisonTable: parsed.comparisonTable ?? undefined,
+      teamOrFounder: parsed.teamOrFounder ?? undefined,
     });
 
     console.log(`[LLM] ✅ llms.txt сгенерирован (${llmsTxt.length} символов)`);

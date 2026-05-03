@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   try {
     // Rate limit
     const ip = getClientIp(req.headers);
-    const rl = checkRateLimit(`register:${ip}`, REGISTER_RATE_LIMIT);
+    const rl = await checkRateLimit(`register:${ip}`, REGISTER_RATE_LIMIT);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Слишком много попыток регистрации. Попробуйте позже." },

@@ -75,11 +75,11 @@ const TYPE_CONFIG: Record<
   },
   "schema-faq": {
     label: "\u0411\u043b\u043e\u043a \u0432\u043e\u043f\u0440\u043e\u0441-\u043e\u0442\u0432\u0435\u0442",
-    role: "copywriter",
+    role: "dev",
     whyBusiness:
       "\u041a\u043e\u0433\u0434\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u044b \u0437\u0430\u0434\u0430\u044e\u0442 \u0432\u043e\u043f\u0440\u043e\u0441\u044b \u043d\u0435\u0439\u0440\u043e\u0441\u0435\u0442\u0438, \u043e\u043d\u0430 \u0438\u0449\u0435\u0442 \u0433\u043e\u0442\u043e\u0432\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u0441\u0430\u0439\u0442\u0430\u0445. \u0411\u0435\u0437 FAQ-\u0431\u043b\u043e\u043a\u0430 \u0432\u0430\u0441 \u0432 \u044d\u0442\u0438\u0445 \u043e\u0442\u0432\u0435\u0442\u0430\u0445 \u043d\u0435\u0442.",
     whatToDo:
-      "\u041a\u043e\u043f\u0438\u0440\u0430\u0439\u0442\u0435\u0440 \u0441\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u0435\u0442 5\u201310 \u0447\u0430\u0441\u0442\u044b\u0445 \u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432 \u0441 \u043e\u0442\u0432\u0435\u0442\u0430\u043c\u0438. \u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0438\u0441\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u044f\u0435\u0442 \u0440\u0430\u0437\u043c\u0435\u0442\u043a\u0443.",
+      "\u0412\u043e\u043f\u0440\u043e\u0441\u044b \u0438 \u043e\u0442\u0432\u0435\u0442\u044b \u0443\u0436\u0435 \u0441\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u043d\u044b \u2014 \u0441\u043c\u043e\u0442\u0440\u0438\u0442\u0435 \u0433\u043e\u0442\u043e\u0432\u044b\u0439 \u043a\u043e\u0434 \u043d\u0438\u0436\u0435. \u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0438\u0441\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u044f\u0435\u0442 \u0435\u0433\u043e \u043d\u0430 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0443. \u0417\u0430\u043d\u0438\u043c\u0430\u0435\u0442 15 \u043c\u0438\u043d\u0443\u0442.",
     impactWeight: 8,
     typeIcon: HelpCircle,
   },
@@ -301,17 +301,13 @@ function AuditProgressCard({ recommendations }: { recommendations: Recommendatio
 /*  Inline llms.txt viewer                       */
 /* ──────────────────────────────────────────── */
 
-function LlmsTxtInlineBlock({ content, siteUrl }: { content: string; siteUrl: string }) {
+function LlmsTxtInlineBlock({ content }: { content: string; siteUrl: string }) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const hostname = (() => {
-    try { return new URL(siteUrl).hostname; } catch { return siteUrl; }
-  })();
-
   const lines = content.split("\n");
   const isLong = lines.length > 12;
-  const displayed = expanded || !isLong ? content : lines.slice(0, 12).join("\n") + "\n…";
+  const displayed = expanded || !isLong ? content : lines.slice(0, 12).join("\n") + "\n\u2026";
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content);
@@ -330,46 +326,36 @@ function LlmsTxtInlineBlock({ content, siteUrl }: { content: string; siteUrl: st
   };
 
   return (
-    <div className="mt-4 mb-2 rounded-xl overflow-hidden border border-[#C7D2FE] bg-[#EEF2FF]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#C7D2FE]">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#4338CA]/10">
-            <Bot className="h-3.5 w-3.5 text-[#4338CA]" />
-          </div>
-          <div>
-            <p className="text-[13px] font-semibold text-[#1a1a1a]">Готовый файл llms.txt</p>
-            <p className="text-[11px] text-[#787774]">
-              Разместить по адресу:{" "}
-              <code className="font-mono text-[#4338CA]">{hostname}/llms.txt</code>
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="mt-2 rounded-xl overflow-hidden border border-[#E5E4E0]">
+      {/* Toolbar — identical to RecCard code accordion */}
+      <div className="flex items-center justify-between bg-[#1a1a1a] px-4 py-2.5">
+        <span className="text-[10px] font-medium text-[#555] tracking-wider uppercase">
+          {"\u0413\u043e\u0442\u043e\u0432\u044b\u0439 \u043a\u043e\u0434"}
+        </span>
+        <div className="flex items-center gap-1">
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1.5 rounded-lg border border-[#C7D2FE] bg-white px-3 py-1.5 text-[11px] font-medium text-[#4338CA] hover:bg-[#EEF2FF] transition-colors"
+            className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium text-[#888] hover:bg-[#2a2a2a] hover:text-white transition-all"
           >
             <Download className="h-3 w-3" />
-            Скачать
+            {"\u0421\u043a\u0430\u0447\u0430\u0442\u044c"}
           </button>
           <button
             onClick={handleCopy}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors ${
-              copied
-                ? "border border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D]"
-                : "border border-[#C7D2FE] bg-white text-[#4338CA] hover:bg-[#EEF2FF]"
-            }`}
+            className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium text-[#888] hover:bg-[#2a2a2a] hover:text-white transition-all"
           >
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            {copied ? "Скопировано" : "Копировать"}
+            {copied ? (
+              <><Check className="h-3 w-3 text-[#4ADE80]" />{"\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e"}</>
+            ) : (
+              <><Copy className="h-3 w-3" />{"\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c"}</>
+            )}
           </button>
         </div>
       </div>
 
       {/* Code */}
-      <div className="bg-[#1a1a1a] px-5 py-4">
-        <pre className="text-[12px] leading-[1.75] text-[#E0E0E0] font-mono whitespace-pre-wrap break-words">
+      <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] overflow-x-auto px-4 py-4">
+        <pre className="text-[12px] leading-[1.7] text-[#E0E0E0] font-mono whitespace-pre-wrap break-words">
           {displayed}
         </pre>
       </div>
@@ -378,21 +364,12 @@ function LlmsTxtInlineBlock({ content, siteUrl }: { content: string; siteUrl: st
       {isLong && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center justify-center gap-1.5 border-t border-[#C7D2FE] bg-[#EEF2FF] py-2.5 text-[11px] font-medium text-[#4338CA] hover:bg-[#E0E7FF] transition-colors"
+          className="flex w-full items-center justify-center gap-1.5 border-t border-[#2a2a2a] bg-[#1a1a1a] py-2.5 text-[11px] font-medium text-[#555] hover:text-[#888] transition-colors"
         >
           {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          {expanded ? "Свернуть" : `Показать полностью (${lines.length} строк)`}
+          {expanded ? "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c" : `\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u043e\u043b\u043d\u043e\u0441\u0442\u044c\u044e (${lines.length} \u0441\u0442\u0440\u043e\u043a)`}
         </button>
       )}
-
-      {/* Footer hint */}
-      <div className="border-t border-[#C7D2FE] bg-[#EEF2FF]/70 px-4 py-2.5">
-        <p className="text-[11px] text-[#787774]">
-          <strong className="text-[#4338CA]">Как установить:</strong> Скопируйте содержимое и создайте файл{" "}
-          <code className="font-mono">llms.txt</code> в корне вашего сайта (или добавьте роут{" "}
-          <code className="font-mono">/llms.txt</code> в вашем фреймворке).
-        </p>
-      </div>
     </div>
   );
 }
@@ -411,12 +388,20 @@ function RecCard({
   generatedLlmsTxt?: string;
 }) {
   const [showCode, setShowCode] = useState(false);
+  const [showLlmsTxt, setShowLlmsTxt] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const config = getConfig(rec.type);
   const role = ROLE_META[config.role];
   const impact = impactLabel(rec.type);
-  const hasCode = rec.generatedCode && rec.generatedCode.trim().length > 0;
+
+  // For llms-txt cards the generated content is already in LlmsTxtInlineBlock.
+  // Never show the generatedCode accordion for that type — it would be a duplicate.
+  const isLlmsTxtCard = rec.type === "llms-txt";
+  const hasCode =
+    !isLlmsTxtCard &&
+    rec.generatedCode &&
+    rec.generatedCode.trim().length > 0;
 
   const handleCopy = async () => {
     if (!rec.generatedCode) return;
@@ -435,80 +420,99 @@ function RecCard({
       : "bg-[#DDDCDA]";
 
   return (
-    <div className="rounded-xl border border-[#EAEAEA] bg-white overflow-hidden">
-      <div className={`h-1 w-full ${barColor}`} />
-      <div className="p-5">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7F6F3] text-sm font-bold text-[#BBBBBB]">
+    <div className="rounded-xl border border-[#EAEAEA] bg-white overflow-hidden shadow-sm">
+      {/* Priority stripe */}
+      <div className={`h-[3px] w-full ${barColor}`} />
+
+      <div className="p-5 space-y-4">
+        {/* ── Header ── */}
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F7F6F3] text-[13px] font-bold text-[#BBBBBB]">
             {index}
           </div>
-          <div className="flex-1 min-w-0">
-            <span className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-semibold ${role.color}`}>
-              <span>{role.emoji}</span>
-              {role.label}
-            </span>
-            <h3 className="text-[15px] font-semibold text-[#1a1a1a] leading-snug mt-1.5">{rec.title}</h3>
-          </div>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${impact.color}`}>
-            {impact.text}
-          </span>
-        </div>
-
-        <div className="space-y-3 mb-4">
-          <div className="rounded-lg bg-[#FFFBF0] border border-[#FBF3DB] px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#B08D19] mb-1">
-              {"\u0417\u0430\u0447\u0435\u043c \u044d\u0442\u043e \u043d\u0443\u0436\u043d\u043e \u0431\u0438\u0437\u043d\u0435\u0441\u0443"}
-            </p>
-            <p className="text-[13px] leading-[1.7] text-[#555]">{config.whyBusiness}</p>
-          </div>
-          <div className="rounded-lg bg-[#F0FDF4] border border-[#BBF7D0] px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#15803D] mb-1">
-              {"\u0427\u0442\u043e \u043d\u0443\u0436\u043d\u043e \u0441\u0434\u0435\u043b\u0430\u0442\u044c"}
-            </p>
-            <p className="text-[13px] leading-[1.7] text-[#555]">{config.whatToDo}</p>
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${role.color}`}>
+                <span>{role.emoji}</span>
+                {role.label}
+              </span>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${impact.color}`}>
+                {impact.text}
+              </span>
+            </div>
+            <h3 className="text-[15px] font-semibold text-[#1a1a1a] leading-snug">
+              {rec.title}
+            </h3>
           </div>
         </div>
 
-        {rec.description && (
-          <p className="text-[12px] leading-relaxed text-[#AAAAAA] border-t border-[#F0EFEB] pt-3 mb-4">
-            {rec.description}
-          </p>
-        )}
-
-        {/* Inline llms.txt block — shown right here, no tab switching needed */}
-        {rec.type === "llms-txt" && generatedLlmsTxt && !isPdf && (
-          <LlmsTxtInlineBlock content={generatedLlmsTxt} siteUrl={projectUrl ?? ""} />
-        )}
-
-        {hasCode && !isPdf && (
+        {/* ── Body — owner-friendly explanation ── */}
+        <div className="space-y-2 pl-11">
           <div>
+            <p className="text-[12px] font-medium text-[#999] mb-0.5">
+              {"\u0417\u0430\u0447\u0435\u043c \u044d\u0442\u043e \u043d\u0443\u0436\u043d\u043e"}
+            </p>
+            <p className="text-[13px] leading-[1.7] text-[#444]">{config.whyBusiness}</p>
+          </div>
+          <div className="border-t border-[#F0EFEB] pt-2">
+            <p className="text-[12px] font-medium text-[#999] mb-0.5">
+              {"\u0427\u0442\u043e \u0441\u0434\u0435\u043b\u0430\u0442\u044c"}
+            </p>
+            <p className="text-[13px] leading-[1.7] text-[#444]">{config.whatToDo}</p>
+          </div>
+
+          {/* LLM description — small, secondary */}
+          {rec.description && (
+            <p className="border-t border-[#F0EFEB] pt-2 text-[11px] leading-relaxed text-[#BBBBBB]">
+              {rec.description}
+            </p>
+          )}
+        </div>
+
+        {/* ── llms.txt content block (replaces generatedCode for this type) ── */}
+        {isLlmsTxtCard && generatedLlmsTxt && !isPdf && (
+          <div className="pl-11">
+            <button
+              onClick={() => setShowLlmsTxt((v) => !v)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-[#FAFAFA] px-3 py-2 text-[12px] font-medium text-[#787774] hover:border-[#D0D0D0] hover:text-[#1a1a1a] transition-all"
+            >
+              {showLlmsTxt ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {"\u0424\u0430\u0439\u043b llms.txt \u0434\u043b\u044f \u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f"}
+            </button>
+            {showLlmsTxt && (
+              <LlmsTxtInlineBlock content={generatedLlmsTxt} siteUrl={projectUrl ?? ""} />
+            )}
+          </div>
+        )}
+
+        {/* ── Developer code accordion (all OTHER types) ── */}
+        {hasCode && !isPdf && (
+          <div className="pl-11">
             <button
               onClick={() => setShowCode((v) => !v)}
-              className="flex items-center gap-2 text-xs font-medium text-[#787774] hover:text-[#1a1a1a] transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-[#FAFAFA] px-3 py-2 text-[12px] font-medium text-[#787774] hover:border-[#D0D0D0] hover:text-[#1a1a1a] transition-all"
             >
               {showCode ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {showCode
-                ? "\u0421\u043a\u0440\u044b\u0442\u044c \u043a\u043e\u0434 \u0434\u043b\u044f \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0438\u0441\u0442\u0430"
-                : "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043a\u043e\u0434 \u0434\u043b\u044f \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0438\u0441\u0442\u0430"}
+              {"\u041a\u043e\u0434 \u0434\u043b\u044f \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0430"}
             </button>
             {showCode && (
-              <div className="mt-3 rounded-xl overflow-hidden border border-[#E5E4E0] bg-[#1a1a1a]">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#2a2a2a]">
-                  <span className="text-[10px] font-medium uppercase tracking-widest text-[#666]">
-                    {"\u0413\u043e\u0442\u043e\u0432\u044b\u0439 \u043a\u043e\u0434 \u2014 \u0441\u043a\u043e\u043f\u0438\u0440\u0443\u0439\u0442\u0435 \u0438 \u043f\u0435\u0440\u0435\u0434\u0430\u0439\u0442\u0435 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0438\u0441\u0442\u0443"}
+              <div className="mt-2 rounded-xl overflow-hidden border border-[#E5E4E0]">
+                <div className="flex items-center justify-between bg-[#1a1a1a] px-4 py-2.5">
+                  <span className="text-[10px] font-medium text-[#555] tracking-wider uppercase">
+                    {"\u0413\u043e\u0442\u043e\u0432\u044b\u0439 \u043a\u043e\u0434"}
                   </span>
                   <button
                     onClick={handleCopy}
-                    className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium text-[#888] hover:bg-[#333] hover:text-white transition-all"
+                    className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium text-[#888] hover:bg-[#2a2a2a] hover:text-white transition-all"
                   >
                     {copied ? (
                       <><Check className="h-3 w-3 text-[#4ADE80]" />{"\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e"}</>
                     ) : (
-                      <><Copy className="h-3 w-3" />{"\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043a\u043e\u0434"}</>
+                      <><Copy className="h-3 w-3" />{"\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c"}</>
                     )}
                   </button>
                 </div>
-                <div className="overflow-x-auto p-4">
+                <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] overflow-x-auto px-4 py-4">
                   <pre className="text-[12px] leading-[1.7] text-[#E0E0E0] font-mono whitespace-pre-wrap break-words">
                     {rec.generatedCode}
                   </pre>
@@ -518,8 +522,9 @@ function RecCard({
           </div>
         )}
 
+        {/* ── PDF: code always visible ── */}
         {hasCode && isPdf && (
-          <div className="mt-3 rounded-lg border border-[#EAEAEA] bg-[#F7F6F3] p-4">
+          <div className="pl-11 mt-1 rounded-lg border border-[#EAEAEA] bg-[#F7F6F3] p-4">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-[#787774] mb-2">
               {"\u041a\u043e\u0434 \u0434\u043b\u044f \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0438\u0441\u0442\u0430"}
             </p>

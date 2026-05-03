@@ -4,22 +4,22 @@ import { redisConnection } from "@/lib/redis";
 export const reportQueue = new Queue("report-generation", {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 2,
+    attempts: 3,
     backoff: {
       type: "exponential",
-      delay: 2000,
+      delay: 5000, // 5s → 10s → 20s
     },
-    removeOnComplete: { count: 100 },  // Храним последние 100 завершённых
-    removeOnFail: { count: 500 },      // Храним последние 500 упавших
+    removeOnComplete: { count: 100 },
+    removeOnFail: false, // Keep ALL failed jobs — visible in Bull Board as DLQ
   },
 });
 
 export const pdfQueue = new Queue("pdf-generation", {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 2,
-    backoff: { type: "exponential", delay: 2000 },
+    attempts: 3,
+    backoff: { type: "exponential", delay: 5000 },
     removeOnComplete: { count: 200 },
-    removeOnFail: { count: 100 },
+    removeOnFail: false, // Keep ALL failed jobs — visible in Bull Board as DLQ
   },
 });

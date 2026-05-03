@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limit по IP (короткий + дневной)
     const ip = getClientIp(request.headers);
-    const rl = checkRateLimit(`analyze:${ip}`, ANALYZE_RATE_LIMIT);
+    const rl = await checkRateLimit(`analyze:${ip}`, ANALYZE_RATE_LIMIT);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Слишком много запросов. Подождите 10 секунд." },
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dailyRl = checkRateLimit(`analyze-daily:${ip}`, ANALYZE_DAILY_LIMIT);
+    const dailyRl = await checkRateLimit(`analyze-daily:${ip}`, ANALYZE_DAILY_LIMIT);
     if (!dailyRl.allowed) {
       return NextResponse.json(
         {
@@ -158,6 +158,8 @@ Return the JSON analysis.`;
       const result = await Promise.any(
         FREE_MODELS.map((model) => tryModel(model, controller.signal))
       );
+      // Cancel all still-pending model requests immediately
+      controller.abort();
       clearTimeout(timeout);
       return NextResponse.json(result);
     } catch (err) {

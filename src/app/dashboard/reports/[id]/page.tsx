@@ -1,3 +1,4 @@
+﻿import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
@@ -15,30 +16,47 @@ import {
   Users,
   BarChart3,
   ArrowRightLeft,
-  CheckCircle2,
-  XCircle,
-  TrendingUp,
-  Megaphone,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RecommendationsPanel } from "@/components/recommendations-panel";
-import { SovDonutChart, SovBarChart } from "@/components/sov-charts";
 import { ScoreRing, ScoreBreakdownBar } from "@/components/score-ring";
-import { SiteChecklist } from "@/components/site-checklist";
-import { CompetitorsTable } from "@/components/competitors-table";
 import { ReportPdfButton } from "@/components/report-pdf-button";
 import { RerunReportButton } from "@/components/rerun-report-button";
-import { ScoreHistoryChart } from "@/components/score-history-chart";
 import { ShareReportButton } from "@/components/share-report-button";
 import { DeleteButton } from "@/components/delete-button";
-import { VisibilityTrendChart } from "@/components/visibility-trend-chart-wrapper";
-import { ContentGaps, type ContentGapItem } from "@/components/content-gaps";
-import { RagVisualizer } from "@/components/ui/rag-visualizer";
-import { LlmsTxtBlock } from "@/components/llms-txt-block";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import {
+  ScoreHistorySection,
+  CompetitorsSection,
+  ContentGapsSection,
+  SovTabSection,
+  PlanTabSection,
+} from "./async-sections";
+
+// ─── Skeleton placeholders ────────────────────────────────────────────────────
+
+function CardSkeleton({ rows = 4, className = "" }: { rows?: number; className?: string }) {
+  return (
+    <div className={`rounded-xl border border-[#EAEAEA] bg-white p-6 space-y-3 ${className}`}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <Skeleton key={i} className={`h-4 rounded ${i === 0 ? "w-1/3" : "w-full"}`} />
+      ))}
+    </div>
+  );
+}
+
+function TabSkeleton() {
+  return (
+    <div className="space-y-4">
+      <CardSkeleton rows={5} />
+      <CardSkeleton rows={3} />
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function ReportPage({
   params,
@@ -50,36 +68,33 @@ export default async function ReportPage({
 
   const { id } = await params;
 
-  const report = await prisma.report.findUnique({
-    where: { id },
-    include: {
-      project: { select: { name: true, url: true, userId: true } },
-      shareOfVoices: {
-        orderBy: { createdAt: "asc" },
-      },
-      recommendations: {
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
-
-  if (!report || report.project.userId !== session.user.id) {
-    redirect("/dashboard");
-  }
-
-  // История Score + план пользователя (параллельно — оба зависят только от session/report)
-  const [scoreHistory, currentUser] = await Promise.all([
-    prisma.report.findMany({
-      where: {
-        projectId: report.projectId,
-        status: "COMPLETED",
-        overallScore: { not: null },
-      },
-      orderBy: { createdAt: "asc" },
+  // ── CRITICAL DATA ONLY — render shell immediately ──────────────────────────
+  // Fetch the smallest possible payload: header fields + scores + status.
+  // Heavy data (shareOfVoices JSON, recommendations, scrapedBody) is
+  // delegated to async child components wrapped in <Suspense>.
+  const [report, currentUser] = await Promise.all([
+    prisma.report.findUnique({
+      where: { id },
       select: {
         id: true,
-        overallScore: true,
+        status: true,
         createdAt: true,
+        projectId: true,
+        shareId: true,
+        overallScore: true,
+        scoreSov: true,
+        scoreSchema: true,
+        scoreLlmsTxt: true,
+        scoreContent: true,
+        scoreAuthority: true,
+        sentiment: true,
+        categorySearched: true,
+        hasLlmsTxt: true,
+        schemaOrgTypes: true,
+        project: { select: { name: true, url: true, userId: true } },
+        // lightweight counts only — no heavy JSON blobs
+        shareOfVoices: { select: { isMentioned: true } },
+        recommendations: { select: { id: true } },
       },
     }),
     prisma.user.findUnique({
@@ -88,52 +103,16 @@ export default async function ReportPage({
     }),
   ]);
 
-  const historyData = scoreHistory.map((r) => ({
-    date: r.createdAt.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }),
-    score: Math.round(r.overallScore!),
-    reportId: r.id,
-  }));
+  if (!report || report.project.userId !== session.user.id) {
+    redirect("/dashboard");
+  }
 
   const isPro = currentUser?.plan === "PRO" || currentUser?.plan === "AGENCY";
 
-  // Найдём предыдущий отчёт по этому проекту для кнопки "Сравнить"
-  const currentIdx = scoreHistory.findIndex((r) => r.id === report.id);
-  const prevReport = currentIdx > 0 ? scoreHistory[currentIdx - 1] : null;
-
-  // ─── Extract target brand from URL ────────────────────
-  const targetBrand = (() => {
-    try {
-      const hostname = new URL(report.project.url).hostname.replace(/^www\./, "");
-      // "civitai.com" → "civitai", "my-brand.co.uk" → "my-brand"
-      return hostname.split(".")[0].toLowerCase();
-    } catch {
-      return report.project.name.toLowerCase();
-    }
-  })();
-
-  // Compute metrics
   const sovTotal = report.shareOfVoices.length;
   const sovMentioned = report.shareOfVoices.filter((s) => s.isMentioned).length;
   const sovPercent = sovTotal > 0 ? Math.round((sovMentioned / sovTotal) * 100) : 0;
 
-  // Collect competitors from SoV — filter out the target brand
-  const allCompetitorsRaw = report.shareOfVoices.flatMap((sov) => {
-    const comps = sov.competitors as { name: string; url?: string }[];
-    return Array.isArray(comps) ? comps : [];
-  });
-
-  const allCompetitors = allCompetitorsRaw.filter((c) => {
-    const name = c.name.toLowerCase().trim();
-    const url = (c.url ?? "").toLowerCase();
-    // Filter out the target brand by name or URL match
-    return (
-      !name.includes(targetBrand) &&
-      !targetBrand.includes(name.replace(/\s+/g, "")) &&
-      !url.includes(targetBrand)
-    );
-  });
-
-  // Schema.org types
   const schemaTypes = Array.isArray(report.schemaOrgTypes)
     ? (report.schemaOrgTypes as string[])
     : [];
@@ -155,6 +134,21 @@ export default async function ReportPage({
 
   const sc = statusConfig[report.status];
 
+  // Previous report for "Сравнить" — tiny query, only needed when COMPLETED
+  const prevReport =
+    report.status === "COMPLETED"
+      ? await prisma.report.findFirst({
+          where: {
+            projectId: report.projectId,
+            status: "COMPLETED",
+            overallScore: { not: null },
+            createdAt: { lt: report.createdAt },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        })
+      : null;
+
   return (
     <div className="pb-12">
       {/* Back navigation */}
@@ -166,7 +160,7 @@ export default async function ReportPage({
         Все отчёты
       </Link>
 
-      {/* Header */}
+      {/* ── Header — renders instantly ─────────────────────────────────────── */}
       <div className="mb-6 rounded-xl border border-[#EAEAEA] bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -200,6 +194,7 @@ export default async function ReportPage({
               </span>
             </div>
           </div>
+
           {/* Action buttons */}
           {report.status === "COMPLETED" && (
             <div className="flex items-center gap-2" data-pdf-hide>
@@ -266,482 +261,134 @@ export default async function ReportPage({
       {/* COMPLETED state */}
       {report.status === "COMPLETED" && (
         <div id="report-content">
-          <Tabs defaultValue="overview" className="w-full space-y-6">
-            <TabsList className="grid w-full grid-cols-4 bg-[#F7F6F3] border border-[#EAEAEA] rounded-xl h-auto p-1">
-              <TabsTrigger value="overview" className="rounded-lg text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">Обзор</TabsTrigger>
-              <TabsTrigger value="queries" className="rounded-lg text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">Детали SoV</TabsTrigger>
-              <TabsTrigger value="tech" className="rounded-lg text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">Аудит и PR</TabsTrigger>
-              <TabsTrigger value="action-plan" className="rounded-lg text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">План действий</TabsTrigger>
+          <Tabs defaultValue="summary" className="w-full space-y-6">
+            <TabsList className="grid w-full grid-cols-3 bg-[#F7F6F3] border border-[#EAEAEA] rounded-xl h-auto p-1">
+              <TabsTrigger value="summary" className="rounded-lg text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                Сводка
+              </TabsTrigger>
+              <TabsTrigger value="sov" className="rounded-lg text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                Где вас ищут
+              </TabsTrigger>
+              <TabsTrigger value="plan" className="rounded-lg text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                План работ
+              </TabsTrigger>
             </TabsList>
 
-            {/* ── TAB: Обзор ─────────────────────────────────── */}
-            <TabsContent value="overview" className="space-y-8 mt-0">
+            {/* ── TAB 1: Сводка ───────────────────────────────────────────── */}
+            <TabsContent value="summary" className="space-y-6 mt-0">
 
-              {/* HERO: Score Header */}
-              <Card className="border-[#EAEAEA] bg-white shadow-none">
-                <CardContent className="px-6 pt-6 pb-8">
-                  <div className="flex flex-col items-center text-center">
-                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774] mb-6">
-                      Общая оценка AI-видимости
-                    </p>
-                    <ScoreRing score={report.overallScore ?? 0} size={200} strokeWidth={12} />
+              {/* HERO — renders instantly */}
+              <div className="rounded-xl border border-[#EAEAEA] bg-white p-8">
+                <div className="flex flex-col items-center text-center gap-6">
+                  <ScoreRing score={report.overallScore ?? 0} size={180} strokeWidth={10} />
 
-                    {/* Quick metric pills */}
-                    <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
-                        <Search className="h-3 w-3 text-[#787774]" />
-                        Узнаваемость: <span className="font-semibold text-[#1a1a1a]">{sovPercent}%</span>
-                        <span className="text-[#BBBBBB]">({sovMentioned}/{sovTotal})</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
-                        <Lightbulb className="h-3 w-3 text-[#787774]" />
-                        Рекомендаций: <span className="font-semibold text-[#1a1a1a]">{report.recommendations.length}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
-                        <Users className="h-3 w-3 text-[#787774]" />
-                        Конкурентов: <span className="font-semibold text-[#1a1a1a]">{new Set(allCompetitors.map((c) => c.name.toLowerCase().trim())).size}</span>
-                      </span>
-                      {report.sentiment && (
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
-                          report.sentiment === "positive"
-                            ? "border border-[#D1E7DD] bg-[#EDF3EC] text-[#2D6A4F]"
-                            : report.sentiment === "negative"
-                              ? "border border-[#F5C2C7] bg-[#FDEBEC] text-[#B02A37]"
-                              : "border border-[#EAEAEA] bg-[#F7F6F3] text-[#787774]"
-                        }`}>
-                          {report.sentiment === "positive" ? "👍" : report.sentiment === "negative" ? "👎" : "➖"}
-                          {report.sentiment === "positive" ? "Позитивная тональность" : report.sentiment === "negative" ? "Негативная тональность" : "Нейтральная тональность"}
-                        </span>
-                      )}
-                      {report.categorySearched && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3 py-1.5 text-xs text-[#555]">
-                          🏷️ {report.categorySearched}
-                        </span>
-                      )}
-                    </div>
+                  <div>
+                    {(() => {
+                      const s = report.overallScore ?? 0;
+                      const [status, hint] =
+                        s >= 75 ? ["Отличная видимость 🎉", "Нейросети хорошо знают ваш бренд. Поддерживайте темп."]
+                        : s >= 50 ? ["Средняя видимость 📈", "Есть потенциал для роста. Несколько шагов — и нейросети будут рекомендовать вас чаще."]
+                        : s >= 25 ? ["Низкая видимость ⚠️", "Нейросети редко называют ваш бренд. Хорошая новость — это легко исправить."]
+                        :           ["Почти не видны 🔴", "Нейросети пока не знают о вас. Начните с задач в «Плане работ»."];
+                      return (
+                        <>
+                          <p className="text-[17px] font-semibold text-[#1a1a1a]">{status}</p>
+                          <p className="mt-1.5 max-w-sm text-[13px] text-[#787774] leading-relaxed">{hint}</p>
+                        </>
+                      );
+                    })()}
                   </div>
-                </CardContent>
-              </Card>
 
-              {/* Score Breakdown + History/Trend grid */}
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3.5 py-2 text-[12px] text-[#555]">
+                      <Search className="h-3.5 w-3.5 text-[#787774]" />
+                      Узнаваемость — <strong className="text-[#1a1a1a] ml-0.5">{sovPercent}%</strong>
+                      <span className="text-[#BBBBBB] ml-0.5">({sovMentioned}/{sovTotal})</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3.5 py-2 text-[12px] text-[#555]">
+                      <Lightbulb className="h-3.5 w-3.5 text-[#787774]" />
+                      Задач в плане — <strong className="text-[#1a1a1a] ml-0.5">{report.recommendations.length}</strong>
+                    </span>
+                    {report.sentiment && (
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-medium ${
+                        report.sentiment === "positive"  ? "border border-[#D1E7DD] bg-[#EDF3EC] text-[#2D6A4F]"
+                        : report.sentiment === "negative" ? "border border-[#F5C2C7] bg-[#FDEBEC] text-[#B02A37]"
+                        :                                   "border border-[#EAEAEA] bg-[#F7F6F3] text-[#787774]"
+                      }`}>
+                        {report.sentiment === "positive" ? "👍 Позитивный тон" : report.sentiment === "negative" ? "👎 Негативный тон" : "➖ Нейтральный тон"}
+                      </span>
+                    )}
+                    {report.categorySearched && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#EAEAEA] bg-[#FBFBFA] px-3.5 py-2 text-[12px] text-[#555]">
+                        🏷️ {report.categorySearched}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Score breakdown (instant) + history charts (async) */}
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card className="border-[#EAEAEA] bg-white shadow-none">
-                  <CardHeader className="px-6 pt-5 pb-0">
-                    <CardTitle className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-                      Из чего складывается оценка
-                    </CardTitle>
-                    <CardDescription className="text-[11px] text-[#BBBBBB]">
-                      Каждый фактор влияет на то, рекомендуют ли вас нейросети
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-6 pt-4 pb-6">
-                    <div className="space-y-4">
-                      <ScoreBreakdownBar
-                        label="Узнаваемость в ИИ"
-                        value={report.scoreSov ?? sovPercent}
-                        icon={<Search className="h-3.5 w-3.5" />}
-                      />
-                      <ScoreBreakdownBar
-                        label="Разметка для роботов"
-                        value={report.scoreSchema ?? (schemaTypes.length > 0 ? 60 : 0)}
-                        icon={<FileText className="h-3.5 w-3.5" />}
-                      />
-                      <ScoreBreakdownBar
-                        label="Визитка для ИИ (llms.txt)"
-                        value={report.scoreLlmsTxt ?? (report.hasLlmsTxt ? 80 : 0)}
-                        icon={<Zap className="h-3.5 w-3.5" />}
-                      />
-                      <ScoreBreakdownBar
-                        label="Качество контента"
-                        value={report.scoreContent ?? 50}
-                        icon={<BarChart3 className="h-3.5 w-3.5" />}
-                      />
-                      <ScoreBreakdownBar
-                        label="Репутация бренда"
-                        value={report.scoreAuthority ?? 30}
-                        icon={<Shield className="h-3.5 w-3.5" />}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="rounded-xl border border-[#EAEAEA] bg-white p-6">
+                  <p className="text-[13px] font-semibold text-[#1a1a1a] mb-0.5">Из чего складывается оценка</p>
+                  <p className="text-[11px] text-[#BBBBBB] mb-5">Каждый фактор влияет на то, рекомендуют ли вас нейросети</p>
+                  <div className="space-y-4">
+                    <ScoreBreakdownBar label="Узнаваемость в АИ"         value={report.scoreSov ?? sovPercent}                              icon={<Search    className="h-3.5 w-3.5" />} />
+                    <ScoreBreakdownBar label="Разметка для роботов"       value={report.scoreSchema ?? (schemaTypes.length > 0 ? 60 : 0)}   icon={<FileText  className="h-3.5 w-3.5" />} />
+                    <ScoreBreakdownBar label="Визитка для АИ (llms.txt)"  value={report.scoreLlmsTxt ?? (report.hasLlmsTxt ? 80 : 0)}       icon={<Zap       className="h-3.5 w-3.5" />} />
+                    <ScoreBreakdownBar label="Качество контента"          value={report.scoreContent ?? 50}                                 icon={<BarChart3 className="h-3.5 w-3.5" />} />
+                    <ScoreBreakdownBar label="Репутация бренда"           value={report.scoreAuthority ?? 30}                               icon={<Shield    className="h-3.5 w-3.5" />} />
+                  </div>
+                </div>
 
-                <div className="space-y-4">
-                  {historyData.length > 1 && (
-                    <ScoreHistoryChart data={historyData} />
-                  )}
-                  <VisibilityTrendChart
-                    currentScore={report.overallScore ?? 0}
+                {/* ⬇ async: fetches score history for this project */}
+                <Suspense fallback={<CardSkeleton rows={6} />}>
+                  <ScoreHistorySection
+                    projectId={report.projectId}
+                    reportId={report.id}
+                    overallScore={report.overallScore ?? 0}
                     createdAt={report.createdAt.toISOString()}
                   />
-                </div>
+                </Suspense>
               </div>
 
-              {/* SoV Donut + Bar charts (no keyword grid) */}
-              {sovTotal > 0 && (
-                <div>
-                  <div className="mb-4 text-center">
-                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-                      Узнаваемость в ИИ
-                    </p>
-                    <p className="mt-1 text-[11px] text-[#BBBBBB]">
-                      Мы спросили нейросети о вашей нише — вот где вас рекомендуют
-                    </p>
-                  </div>
-                  <Card className="border-[#EAEAEA] bg-white shadow-none">
-                    <CardContent className="px-6 pt-6 pb-6">
-                      <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-start">
-                        <div className="flex flex-col items-center shrink-0">
-                          <SovDonutChart mentioned={sovMentioned} total={sovTotal} />
-                        </div>
-                        <Separator orientation="vertical" className="hidden lg:block self-stretch bg-[#F0EFEB]" />
-                        <div className="flex-1 w-full min-w-0">
-                          <SovBarChart
-                            items={report.shareOfVoices.map((s) => ({
-                              keyword: s.keyword,
-                              isMentioned: s.isMentioned,
-                            }))}
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              {/* ⬇ async: fetches & filters competitors */}
+              <Suspense fallback={<CardSkeleton rows={5} />}>
+                <CompetitorsSection
+                  reportId={report.id}
+                  projectUrl={report.project.url}
+                  projectName={report.project.name}
+                  isPro={isPro}
+                />
+              </Suspense>
 
-              {/* Competitors Table */}
-              <div>
-                <div className="mb-4 text-center">
-                  <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-                    Конкуренты в вашей нише
-                  </p>
-                  <p className="mt-1 text-[11px] text-[#BBBBBB]">
-                    {allCompetitors.length > 0
-                      ? "Бренды, которые нейросети рекомендуют чаще всего"
-                      : "После следующего анализа здесь появятся бренды-конкуренты"}
-                  </p>
-                </div>
-                <Card className="border-[#EAEAEA] bg-white shadow-none">
-                  <CardContent className="px-6 pt-6 pb-6">
-                    {allCompetitors.length > 0 ? (
-                      <CompetitorsTable competitors={allCompetitors} isPro={isPro} />
-                    ) : (
-                      <div className="flex flex-col items-center gap-3 py-8 text-center">
-                        <Users className="h-5 w-5 text-[#BBBBBB]" />
-                        <p className="text-sm text-[#787774]">
-                          Нейросети пока не определили прямых конкурентов в этой нише
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+              {/* ⬇ async: fetches gaps logic (renders nothing if no gaps) */}
+              <Suspense fallback={null}>
+                <ContentGapsSection
+                  reportId={report.id}
+                  projectUrl={report.project.url}
+                  projectName={report.project.name}
+                />
+              </Suspense>
 
             </TabsContent>
 
-            {/* ── TAB: Детали SoV ────────────────────────────── */}
-            <TabsContent value="queries" className="space-y-6 mt-0">
-              <div className="rounded-xl border border-[#EAEAEA] bg-[#FBFBFA] px-6 py-5">
-                <div className="flex items-start gap-3">
-                  <Search className="mt-0.5 h-5 w-5 shrink-0 text-[#787774]" />
-                  <div>
-                    <p className="text-sm font-semibold text-[#1a1a1a]">Детальные результаты по запросам</p>
-                    <p className="mt-1 text-xs text-[#787774]">
-                      Для каждого из {sovTotal} ключевых запросов мы спросили нейросеть, рекомендует ли она ваш бренд.
-                      Здесь вы видите точный ответ модели и контекст упоминания.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {sovTotal > 0 ? (
-                <Card className="border-[#EAEAEA] bg-white shadow-none">
-                  <CardContent className="px-6 pt-6 pb-6">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {report.shareOfVoices.map((sov) => (
-                        <div
-                          key={sov.id}
-                          className={`rounded-xl border px-4 py-3 transition-colors ${
-                            sov.isMentioned
-                              ? "border-[#D1E7DD]/60 bg-[#FAFCFA] hover:bg-[#F5F9F5]"
-                              : "border-[#F5C2C7]/40 bg-[#FEFBFB] hover:bg-[#FDF7F7]"
-                          }`}
-                        >
-                          <div className="flex items-start gap-2.5">
-                            {sov.isMentioned ? (
-                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#2D6A4F]" />
-                            ) : (
-                              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#B02A37]" />
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-[#1a1a1a] leading-snug">
-                                {sov.keyword}
-                              </p>
-                              {sov.mentionContext && (
-                                <p className="mt-1 text-[11px] text-[#787774] leading-relaxed line-clamp-2">
-                                  {sov.mentionContext}
-                                </p>
-                              )}
-                              {(() => {
-                                const comps = (sov.competitors as { name: string }[])
-                                  ?.filter((c) => {
-                                    const n = c.name.toLowerCase().trim();
-                                    return !n.includes(targetBrand) && !targetBrand.includes(n.replace(/\s+/g, ""));
-                                  });
-                                if (!Array.isArray(comps) || comps.length === 0) return null;
-                                return (
-                                  <div className="mt-1.5 flex flex-wrap gap-1">
-                                    {comps.slice(0, 3).map((c, ci) => (
-                                      <span
-                                        key={ci}
-                                        className="inline-flex rounded border border-[#EAEAEA] bg-white px-1.5 py-0.5 text-[10px] text-[#787774]"
-                                      >
-                                        {c.name}
-                                      </span>
-                                    ))}
-                                    {comps.length > 3 && (
-                                      <span className="text-[10px] text-[#BBBBBB]">
-                                        +{comps.length - 3}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="border-[#EAEAEA] bg-white shadow-none">
-                  <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                    <Search className="h-5 w-5 text-[#BBBBBB]" />
-                    <p className="text-[#787774] text-sm">Мы пока не нашли данных об упоминаниях вашего бренда</p>
-                  </CardContent>
-                </Card>
-              )}
+            {/* ── TAB 2: Где вас ищут — entire tab async ──────────────────── */}
+            <TabsContent value="sov" className="space-y-6 mt-0">
+              <Suspense fallback={<TabSkeleton />}>
+                <SovTabSection
+                  reportId={report.id}
+                  projectUrl={report.project.url}
+                  projectName={report.project.name}
+                />
+              </Suspense>
             </TabsContent>
 
-            {/* ── TAB: Аудит и PR ────────────────────────────── */}
-            <TabsContent value="tech" className="space-y-8 mt-0">
-
-              {/* Technical Audit */}
-              <div>
-                <div className="mb-4 text-center">
-                  <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-                    Технический аудит
-                  </p>
-                  <p className="mt-1 text-[11px] text-[#BBBBBB]">
-                    Что нейросети видят (и не видят) на вашем сайте
-                  </p>
-                </div>
-                <Card className="border-[#EAEAEA] bg-white shadow-none">
-                  <CardContent className="px-6 pt-6 pb-6">
-                    <SiteChecklist
-                      hasLlmsTxt={report.hasLlmsTxt}
-                      schemaOrgTypes={schemaTypes}
-                      contentLength={report.contentLength}
-                      siteTitle={report.siteTitle}
-                      siteDescription={report.siteDescription}
-                      siteH1={report.siteH1}
-                      robotsTxtAiFriendly={report.robotsTxtAiFriendly}
-                      semanticHtmlValid={report.semanticHtmlValid}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Digital PR */}
-              {report.digitalPr && Array.isArray(report.digitalPr) && (report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[]).length > 0 && (() => {
-                const PLATFORM_LABELS: Record<string, string> = {
-                  "vc.ru": "VC.ru",
-                  "habr.com": "Хабр",
-                  "pikabu.ru": "Пикабу",
-                  "otzovik.com": "Отзовик",
-                  "yandex.ru/maps": "Яндекс Карты",
-                  "2gis.ru": "2ГИС",
-                  "reddit.com": "Reddit",
-                  "quora.com": "Quora",
-                  "producthunt.com": "Product Hunt",
-                  "trustpilot.com": "Trustpilot",
-                };
-
-                function localizeContext(ctx: string, platform: string, mentioned: boolean): string {
-                  if (!ctx || ctx.trim().length === 0) {
-                    const platformLabel = PLATFORM_LABELS[platform] ?? platform;
-                    return mentioned
-                      ? `Бренд упоминается на ${platformLabel}`
-                      : `Упоминания на ${platformLabel} не найдены`;
-                  }
-                  const cyrillicCount = (ctx.match(/[а-яА-ЯёЁ]/g) || []).length;
-                  const latinCount = (ctx.match(/[a-zA-Z]/g) || []).length;
-                  const totalLetters = cyrillicCount + latinCount;
-                  const isPredominantlyRussian = totalLetters > 0 && (cyrillicCount / totalLetters) > 0.4;
-                  if (isPredominantlyRussian) return ctx;
-                  const platformLabel = PLATFORM_LABELS[platform] ?? platform;
-                  if (!mentioned) return `Органические упоминания на ${platformLabel} не найдены`;
-                  return `Бренд упоминается на ${platformLabel}`;
-                }
-
-                const mentions = report.digitalPr as { platform: string; mentioned: boolean; url?: string; context: string; sentiment?: string }[];
-                return (
-                  <div>
-                    <div className="mb-4 text-center">
-                      <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#787774]">
-                        Digital PR
-                      </p>
-                      <p className="mt-1 text-[11px] text-[#BBBBBB]">
-                        Где о вас говорят на популярных площадках
-                      </p>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {mentions.map((mention) => (
-                        <Card key={mention.platform} className={`border shadow-none transition-colors ${
-                          mention.mentioned
-                            ? "border-[#D1E7DD]/60 bg-[#FAFCFA]"
-                            : "border-[#EAEAEA] bg-white"
-                        }`}>
-                          <CardContent className="px-5 pt-5 pb-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-semibold text-[#1a1a1a]">
-                                {PLATFORM_LABELS[mention.platform] ?? mention.platform}
-                              </span>
-                              {mention.mentioned ? (
-                                <CheckCircle2 className="h-4 w-4 text-[#2D6A4F]" />
-                              ) : (
-                                <XCircle className="h-4 w-4 text-[#BBBBBB]" />
-                              )}
-                            </div>
-                            <p className="text-[11px] leading-relaxed text-[#787774] line-clamp-3">
-                              {localizeContext(mention.context, mention.platform, mention.mentioned)}
-                            </p>
-                            {mention.url && mention.mentioned && (
-                              <a
-                                href={mention.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-2 inline-flex text-[10px] font-medium text-[#555] hover:text-[#1a1a1a] transition-colors"
-                              >
-                                Открыть →
-                              </a>
-                            )}
-                            {mention.sentiment && (
-                              <div className="mt-2">
-                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                  mention.sentiment === "positive"
-                                    ? "bg-[#EDF3EC] text-[#2D6A4F]"
-                                    : mention.sentiment === "negative"
-                                      ? "bg-[#FDEBEC] text-[#B02A37]"
-                                      : "bg-[#F7F6F3] text-[#787774]"
-                                }`}>
-                                  {mention.sentiment === "positive" ? "Позитивно" : mention.sentiment === "negative" ? "Негативно" : "Нейтрально"}
-                                </span>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* RAG Visualizer */}
-              {report.scrapedBody && (
-                <Card className="border-[#EAEAEA] bg-white shadow-none">
-                  <CardContent className="px-6 pt-6 pb-6">
-                    <RagVisualizer text={report.scrapedBody} />
-                  </CardContent>
-                </Card>
-              )}
-
-            </TabsContent>
-
-            {/* ── TAB: План действий ─────────────────────────── */}
-            <TabsContent value="action-plan" className="space-y-8 mt-0">
-
-              {/* Content Gaps */}
-              {(() => {
-                const existingRecTypes = new Set(report.recommendations.map((r) => r.type));
-                const missedKeywords = report.shareOfVoices.filter((s) => !s.isMentioned);
-                const topCompetitorNames = Array.from(
-                  new Set(
-                    allCompetitors
-                      .map((c) => c.name.trim())
-                      .filter((n) => n.length > 0)
-                  )
-                ).slice(0, 5);
-
-                const contentGaps: ContentGapItem[] = [];
-
-                if (!existingRecTypes.has("content") && !existingRecTypes.has("rag-content")) {
-                  if (missedKeywords.length > 0 && topCompetitorNames.length > 0) {
-                    const kw1 = missedKeywords[0];
-                    contentGaps.push({
-                      topic: `Контент по теме «${kw1.keyword}»`,
-                      competitorSource: topCompetitorNames[0],
-                      aiInsight: `Когда клиенты спрашивают нейросеть «${kw1.keyword}», она рекомендует ${topCompetitorNames[0]}, а не вас.`,
-                      actionText: "Создать контент",
-                      actionType: "content",
-                    });
-                  }
-                  if (missedKeywords.length > 1 && topCompetitorNames.length > 0) {
-                    const kw2 = missedKeywords[1];
-                    const comp = topCompetitorNames[Math.min(1, topCompetitorNames.length - 1)];
-                    contentGaps.push({
-                      topic: `Экспертная статья: «${kw2.keyword}»`,
-                      competitorSource: comp,
-                      aiInsight: `По запросу «${kw2.keyword}» ИИ ссылается на ${comp}. Напишите глубокий материал — и нейросети начнут ссылаться на вас.`,
-                      actionText: "Создать контент",
-                      actionType: "content",
-                    });
-                  }
-                }
-
-                if (!report.hasLlmsTxt && !existingRecTypes.has("llms-txt")) {
-                  contentGaps.push({
-                    topic: "Визитка для нейросетей (llms.txt)",
-                    competitorSource: topCompetitorNames[0] ?? "лидеры ниши",
-                    aiInsight: "У лидеров ниши есть специальный файл-визитка. У вас такого файла нет — ИИ вас просто не видит.",
-                    actionText: "Создать визитку",
-                    actionType: "llms-txt",
-                  });
-                }
-
-                if (schemaTypes.length === 0 && report.hasLlmsTxt && !existingRecTypes.has("schema-faq")) {
-                  contentGaps.push({
-                    topic: "FAQ / глоссарий терминов",
-                    competitorSource: topCompetitorNames[0] ?? "лидеры ниши",
-                    aiInsight: "У конкурентов есть FAQ-раздел. Нейросети активно берут из него информацию.",
-                    actionText: "Создать FAQ",
-                    actionType: "faq",
-                  });
-                }
-
-                if (contentGaps.length === 0) return null;
-                return (
-                  <ContentGaps
-                    gaps={contentGaps}
-                    projectUrl={report.project.url}
-                    siteTitle={report.siteTitle ?? report.project.name}
-                  />
-                );
-              })()}
-
-              {/* Recommendations */}
-              <RecommendationsPanel
-                recommendations={report.recommendations.map((rec) => ({
-                  id: rec.id,
-                  type: rec.type,
-                  title: rec.title,
-                  description: rec.description,
-                  generatedCode: rec.generatedCode,
-                }))}
-                projectUrl={report.project.url}
-                generatedLlmsTxt={report.generatedLlmsTxt ?? undefined}
-              />
-
+            {/* ── TAB 3: План работ — entire tab async ────────────────────── */}
+            <TabsContent value="plan" className="space-y-6 mt-0">
+              <Suspense fallback={<TabSkeleton />}>
+                <PlanTabSection reportId={report.id} />
+              </Suspense>
             </TabsContent>
 
           </Tabs>

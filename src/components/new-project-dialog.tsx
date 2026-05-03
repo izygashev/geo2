@@ -172,6 +172,9 @@ export function NewProjectDialog({
                     )}
                   </Button>
                 </div>
+                <p className="text-center text-[11px] text-[#CCCCCC]">
+                  Анализ может занимать до 10 минут
+                </p>
               </div>
             </form>
           </div>

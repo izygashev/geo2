@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Rate limit — burst (per user)
-  const rl = checkRateLimit(`gen-content:${session.user.id}`, GENERATE_RATE_LIMIT);
+  const rl = await checkRateLimit(`gen-content:${session.user.id}`, GENERATE_RATE_LIMIT);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Слишком много запросов. Подождите минуту." },
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Rate limit — daily cap (per user, cost protection)
-  const dailyRl = checkRateLimit(`gen-content-daily:${session.user.id}`, GENERATE_DAILY_LIMIT);
+  const dailyRl = await checkRateLimit(`gen-content-daily:${session.user.id}`, GENERATE_DAILY_LIMIT);
   if (!dailyRl.allowed) {
     return NextResponse.json(
       { error: "Достигнут дневной лимит генераций (30). Попробуйте завтра." },
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
 
   // Rate limit — IP layer (defense in depth against token farms)
   const ip = getClientIp(req.headers);
-  const ipRl = checkRateLimit(`gen-content-ip:${ip}`, GENERATE_IP_LIMIT);
+  const ipRl = await checkRateLimit(`gen-content-ip:${ip}`, GENERATE_IP_LIMIT);
   if (!ipRl.allowed) {
     return NextResponse.json(
       { error: "Слишком много запросов с этого IP. Подождите минуту." },

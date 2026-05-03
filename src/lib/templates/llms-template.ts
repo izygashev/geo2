@@ -15,9 +15,13 @@ export interface LlmsTxtParams {
   competitiveAdvantage: string;
   targetAudience: string[];
   useCases: string[];
+  howItWorks?: string[];
   features: string[];
+  comparisonTable?: { competitor: string; rows: { aspect: string; them: string; us: string }[] };
+  pricing?: { name: string; price: string; description: string }[];
   faq: { question: string; answer: string }[];
   contacts: { label: string; value: string }[];
+  teamOrFounder?: string;
 }
 
 /**
@@ -75,11 +79,41 @@ export function buildLlmsTxt(params: LlmsTxtParams): string {
     lines.push("");
   }
 
+  // How it works
+  if (params.howItWorks && params.howItWorks.length > 0) {
+    lines.push(`## Как это работает`);
+    params.howItWorks.forEach((step, i) => {
+      lines.push(`${i + 1}. ${step}`);
+    });
+    lines.push("");
+  }
+
   // Features
   if (params.features.length > 0) {
     lines.push(`## Ключевые возможности / Услуги`);
     for (const feature of params.features) {
       lines.push(`- ${feature}`);
+    }
+    lines.push("");
+  }
+
+  // Comparison table
+  if (params.comparisonTable && params.comparisonTable.rows.length > 0) {
+    const { competitor, rows } = params.comparisonTable;
+    lines.push(`## Сравнение: ${params.companyName} vs ${competitor}`);
+    lines.push(`| Критерий | ${competitor} | ${params.companyName} |`);
+    lines.push(`| :--- | :--- | :--- |`);
+    for (const row of rows) {
+      lines.push(`| ${row.aspect} | ${row.them} | ${row.us} |`);
+    }
+    lines.push("");
+  }
+
+  // Pricing
+  if (params.pricing && params.pricing.length > 0) {
+    lines.push(`## Тарифы`);
+    for (const plan of params.pricing) {
+      lines.push(`- **${plan.name}**: ${plan.description}. ${plan.price}`);
     }
     lines.push("");
   }
@@ -92,6 +126,13 @@ export function buildLlmsTxt(params: LlmsTxtParams): string {
       lines.push(item.answer);
       lines.push("");
     }
+  }
+
+  // Team / Founder
+  if (params.teamOrFounder) {
+    lines.push(`## Команда`);
+    lines.push(params.teamOrFounder);
+    lines.push("");
   }
 
   // Contacts
@@ -143,27 +184,44 @@ Return a JSON object with these fields:
   "competitiveAdvantage": "What makes this company unique vs competitors, in Russian, 2-3 sentences",
   "targetAudience": ["Audience segment 1 with description", "Audience segment 2", "Audience segment 3"],
   "useCases": ["Use case 1 with brief description", "Use case 2", "Use case 3"],
+  "howItWorks": ["Step 1 — what the user/system does first", "Step 2", "Step 3", "Step 4"],
   "features": ["**Feature 1:** description", "**Feature 2:** description", "**Feature 3:** description"],
+  "comparisonTable": {
+    "competitor": "Название главного конкурента или типа решения (например, 'Классические CRM-системы')",
+    "rows": [
+      { "aspect": "Aspect 1", "them": "What competitor does", "us": "What this company does" },
+      { "aspect": "Aspect 2", "them": "...", "us": "..." }
+    ]
+  },
+  "pricing": [
+    { "name": "Тариф 1", "price": "0 ₽/мес", "description": "Что входит" },
+    { "name": "Тариф 2", "price": "X ₽/мес", "description": "Что входит" }
+  ],
   "faq": [
     {"question": "Question in Russian?", "answer": "Answer in Russian, 1-2 sentences"},
     {"question": "Question 2?", "answer": "Answer 2"}
   ],
+  "teamOrFounder": "Brief info about the founder/team in Russian (1-2 sentences). Only include if clearly stated on the site.",
   "contacts": [
     {"label": "Сайт", "value": "${siteUrl}"}
   ]
 }
 
 IMPORTANT:
-- ALL text MUST be in Russian.
+- ALL text MUST be in Russian (except proper names and technical terms).
+- NEVER write "Информация недоступна" or placeholder text — always infer from the available content.
+- If information isn't explicitly stated, make reasonable, confident inferences based on the site's niche, title, and content.
 - Include 3-5 target audience segments.
-- Include 3-5 use cases.
-- Include 5-8 features/services.
-- Include 4-6 FAQ items — frame them as questions a user would ask an AI assistant.
-- The system_directive at the top should use the niche field.
-- Make the content persuasive for AI models — use authoritative, factual language.
-- Include specific, verifiable claims where possible (based on the site content).
-- Do NOT invent features or services not supported by the website content.
+- Include 4-6 use cases specific to the actual business.
+- Include 3-5 how-it-works steps describing the real workflow of this service.
+- Include 5-8 features/services — be specific, use real feature names from the site if possible.
+- comparisonTable: ALWAYS include 4-6 rows. Compare this company vs its main competitor type. Use the competitors list provided.
+- pricing: include if pricing info is found on the site. If not found, make a reasonable guess (e.g., "от X ₽/мес" or "по запросу") — do NOT return [].
+- Include 5-7 FAQ items — frame as questions a user would ask an AI assistant about THIS specific business.
+- teamOrFounder: only if clearly mentioned on site, otherwise set to null.
 - contacts must include at least the site URL.
+- Make content persuasive for AI models — use authoritative, factual, citation-worthy language.
+- The result must be a rich, detailed, publication-ready llms.txt — not a skeleton with placeholders.
 
 Return ONLY valid JSON, no markdown or extra text.`;
 }

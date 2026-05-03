@@ -9,9 +9,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-roobert), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-roobert), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-roobert: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -20,6 +21,33 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+
+  /* ── Monopo London design tokens ── */
+  --color-midnight-canvas: #000000;
+  --color-ghost-white:     #ffffff;
+  --color-subtle-gray:     #7f7f7f;
+  --color-medium-gray:     #666970;
+  --color-nebula-accent:   #cd5a07;
+  --gradient-nebula: radial-gradient(
+    circle at center,
+    #cc490c, #ce510b, #cf590b, #d15f0a, #d2660a,
+    #ca7619, #c38428, #bb9136, #aca753,
+    #9ac171, #84dc92, #65faca
+  );
+
+  /* ── Monopo London spacing reference (prefixed to avoid overriding Tailwind scale) ── */
+  --mono-spacing-5:   5px;
+  --mono-spacing-14:  14px;
+  --mono-spacing-15:  15px;
+  --mono-spacing-17:  17px;
+  --mono-spacing-25:  25px;
+  --mono-spacing-35:  35px;
+  --mono-spacing-55:  55px;
+  --mono-spacing-56:  56px;
+  --mono-spacing-111: 111px;
+
+  /* ── Letter spacing ── */
+  --tracking-editorial: 0.15em;
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -51,80 +79,109 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Premium Quiet Luxury — Clean Minimalism
-   Pure white canvas, ultra-precise, high-tech editorial feel
+   Monopo London — Midnight Canvas Design System
+   Dark atmospheric base · Ghost White type · Nebula accents
+   Palette mapped to shadcn/ui tokens (HSL without hsl() wrapper)
    ═══════════════════════════════════════════════════════════ */
+
+/*
+  Color Reference:
+  --color-midnight-canvas : #000000  →   0   0%   0%
+  --color-ghost-white     : #ffffff  →   0   0% 100%
+  --color-subtle-gray     : #7f7f7f  →   0   0%  50%
+  --color-medium-gray     : #666970  → 222   5%  42%
+  --color-nebula-accent   : #cd5a07  →  25  93%  42%
+*/
+
 :root {
-  --background: #FAFAFA;                       /* clean white */
-  --foreground: #0A0A0A;                       /* near-black */
-  --card: #FFFFFF;
-  --card-foreground: #0A0A0A;
-  --popover: #FFFFFF;
-  --popover-foreground: #0A0A0A;
-  --primary: #0A0A0A;                          /* charcoal */
-  --primary-foreground: #FAFAFA;
-  --secondary: #F5F5F5;                        /* clean secondary */
-  --secondary-foreground: #0A0A0A;
-  --muted: #F5F5F5;
-  --muted-foreground: #888888;                 /* muted gray */
-  --accent: #F5F5F5;
-  --accent-foreground: #0A0A0A;
-  --destructive: #DC2626;                      /* red */
-  --border: #E5E5E5;                           /* neutral divider */
-  --input: #E5E5E5;
-  --ring: #CCCCCC;
-  --chart-1: #0A0A0A;
-  --chart-2: #555555;
-  --chart-3: #888888;
-  --chart-4: #BBBBBB;
-  --chart-5: #DDDDDD;
-  --radius: 0.5rem;                            /* 8px */
-  --sidebar: #FAFAFA;
-  --sidebar-foreground: #0A0A0A;
-  --sidebar-primary: #0A0A0A;
-  --sidebar-primary-foreground: #FAFAFA;
-  --sidebar-accent: #F5F5F5;
-  --sidebar-accent-foreground: #0A0A0A;
-  --sidebar-border: #E5E5E5;
-  --sidebar-ring: #CCCCCC;
+  /* ── Surfaces ── */
+  --background:               0 0% 0%;       /* Midnight Canvas #000000       */
+  --foreground:               0 0% 100%;     /* Ghost White    #ffffff         */
+
+  --card:                     0 0% 4%;       /* Slightly elevated dark surface  */
+  --card-foreground:          0 0% 100%;
+
+  --popover:                  0 0% 4%;
+  --popover-foreground:       0 0% 100%;
+
+  /* ── Brand ── */
+  --primary:                  0 0% 100%;     /* Ghost White — pill buttons, CTAs */
+  --primary-foreground:       0 0% 0%;       /* Midnight Canvas text on white   */
+
+  --secondary:                0 0% 10%;      /* Subtle dark card / chip surface  */
+  --secondary-foreground:     0 0% 50%;      /* Subtle Gray for labels           */
+
+  --muted:                    0 0% 7%;
+  --muted-foreground:         0 0% 50%;      /* Subtle Gray #7f7f7f             */
+
+  --accent:                   25 93% 42%;    /* Nebula accent #cd5a07           */
+  --accent-foreground:        0 0% 100%;
+
+  /* ── Semantic ── */
+  --destructive:              0 72% 51%;     /* #DC2626                         */
+
+  /* ── Chrome ── */
+  --border:                   222 5% 42%;    /* Medium Gray #666970             */
+  --input:                    222 5% 42%;    /* Same — outlines on dark surface  */
+  --ring:                     0 0% 50%;      /* Subtle Gray                     */
+
+  /* ── Charts (nebula gradient stops) ── */
+  --chart-1:                  25 93% 42%;    /* #cd5a07 — warm orange           */
+  --chart-2:                  86 40% 59%;    /* #9ac171 — sage green            */
+  --chart-3:                  128 58% 69%;   /* #84dc92 — mint green            */
+  --chart-4:                  162 95% 69%;   /* #65faca — seafoam               */
+  --chart-5:                  222 5% 42%;    /* Medium Gray                     */
+
+  /* ── Radius — 8px base (shadcn default); 42px pill applied selectively via .btn-ghost-outline ── */
+  --radius:                   0.5rem;        /* 8px                             */
+
+  /* ── Sidebar ── */
+  --sidebar:                  0 0% 4%;
+  --sidebar-foreground:       0 0% 100%;
+  --sidebar-primary:          0 0% 100%;
+  --sidebar-primary-foreground: 0 0% 0%;
+  --sidebar-accent:           0 0% 10%;
+  --sidebar-accent-foreground: 0 0% 50%;
+  --sidebar-border:           222 5% 42%;
+  --sidebar-ring:             0 0% 50%;
 }
 
 /* ═══════════════════════════════════════════════════════════
-   .dark class — kept for reference / future toggle
+   .dark — identical to :root (system is dark-first)
    ═══════════════════════════════════════════════════════════ */
 .dark {
-  --background: #141414;
-  --foreground: #E8E8E6;
-  --card: #1C1C1C;
-  --card-foreground: #E8E8E6;
-  --popover: #1C1C1C;
-  --popover-foreground: #E8E8E6;
-  --primary: #E8E8E6;
-  --primary-foreground: #1C1C1C;
-  --secondary: #262626;
-  --secondary-foreground: #D4D4D0;
-  --muted: #262626;
-  --muted-foreground: #787774;
-  --accent: #262626;
-  --accent-foreground: #D4D4D0;
-  --destructive: #C24744;
-  --border: rgba(255,255,255,0.08);
-  --input: rgba(255,255,255,0.10);
-  --ring: rgba(255,255,255,0.20);
-  --chart-1: #E8E8E6;
-  --chart-2: #AAAAAA;
-  --chart-3: #777777;
-  --chart-4: #555555;
-  --chart-5: #333333;
-  --radius: 0.5rem;
-  --sidebar: #141414;
-  --sidebar-foreground: #D4D4D0;
-  --sidebar-primary: #E8E8E6;
-  --sidebar-primary-foreground: #1C1C1C;
-  --sidebar-accent: #262626;
-  --sidebar-accent-foreground: #E8E8E6;
-  --sidebar-border: rgba(255,255,255,0.08);
-  --sidebar-ring: rgba(255,255,255,0.20);
+  --background:               0 0% 0%;
+  --foreground:               0 0% 100%;
+  --card:                     0 0% 4%;
+  --card-foreground:          0 0% 100%;
+  --popover:                  0 0% 4%;
+  --popover-foreground:       0 0% 100%;
+  --primary:                  0 0% 100%;
+  --primary-foreground:       0 0% 0%;
+  --secondary:                0 0% 10%;
+  --secondary-foreground:     0 0% 50%;
+  --muted:                    0 0% 7%;
+  --muted-foreground:         0 0% 50%;
+  --accent:                   25 93% 42%;
+  --accent-foreground:        0 0% 100%;
+  --destructive:              0 72% 51%;
+  --border:                   222 5% 42%;
+  --input:                    222 5% 42%;
+  --ring:                     0 0% 50%;
+  --chart-1:                  25 93% 42%;
+  --chart-2:                  86 40% 59%;
+  --chart-3:                  128 58% 69%;
+  --chart-4:                  162 95% 69%;
+  --chart-5:                  222 5% 42%;
+  --radius:                   0.5rem;
+  --sidebar:                  0 0% 4%;
+  --sidebar-foreground:       0 0% 100%;
+  --sidebar-primary:          0 0% 100%;
+  --sidebar-primary-foreground: 0 0% 0%;
+  --sidebar-accent:           0 0% 10%;
+  --sidebar-accent-foreground: 0 0% 50%;
+  --sidebar-border:           222 5% 42%;
+  --sidebar-ring:             0 0% 50%;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -159,38 +216,74 @@
    Utility classes — editorial surfaces, tactile feedback
    ═══════════════════════════════════════════════════════════ */
 @layer utilities {
-  /* Editorial card — white surface with 1px border */
+  /* Editorial card — dark surface with 1px medium-gray border */
   .glass {
-    @apply border border-neutral-100 bg-white backdrop-blur-md;
+    background: hsl(0 0% 4%);
+    border: 1px solid hsl(222 5% 42%);
+    backdrop-filter: blur(12px);
   }
   .glass-hover {
-    @apply transition-all duration-300 hover:border-neutral-200;
+    transition: border-color 300ms, background 300ms;
+  }
+  .glass-hover:hover {
+    border-color: hsl(0 0% 50%);
   }
 
-  /* Diffusion shadow — ultra-light, wide-spreading */
+  /* Diffusion shadow — on dark, very subtle */
   .shadow-diffuse {
-    box-shadow: 0 20px 40px -15px rgba(0,0,0,0.04);
+    box-shadow: 0 20px 40px -15px rgba(0,0,0,0.60);
   }
   .shadow-diffuse-sm {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.40);
   }
 
-  /* Tight tracking for headings */
+  /* Editorial tracking for headings — 0.15em per design system */
   .tracking-tight-heading {
-    letter-spacing: -0.035em;
+    letter-spacing: 0.15em;
   }
 
   /* Editorial card surface */
   .card-surface {
-    @apply rounded-lg border border-neutral-100 bg-white;
+    border-radius: var(--radius-lg);
+    border: 1px solid hsl(222 5% 42%);
+    background: hsl(0 0% 4%);
   }
   .card-surface-hover {
-    @apply rounded-lg border border-neutral-100 bg-white transition-all duration-300 hover:border-neutral-200 hover:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.06)];
+    border-radius: var(--radius-lg);
+    border: 1px solid hsl(222 5% 42%);
+    background: hsl(0 0% 4%);
+    transition: border-color 300ms, box-shadow 300ms;
+  }
+  .card-surface-hover:hover {
+    border-color: hsl(0 0% 50%);
+    box-shadow: 0 8px 40px -12px rgba(205,90,7,0.18);
   }
 
-  /* Tactile feedback — taste-skill Rule 5 */
+  /* Tactile feedback */
   .btn-tactile:active {
     transform: scale(0.98) translateY(1px);
+  }
+
+  /* Nebula gradient background utility */
+  .bg-nebula {
+    background: var(--gradient-nebula);
+  }
+
+  /* Ghost button — outlined, pill-shaped */
+  .btn-ghost-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ffffff;
+    border-radius: 42px;
+    color: #ffffff;
+    background: transparent;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    transition: background 200ms, color 200ms;
+  }
+  .btn-ghost-outline:hover {
+    background: rgba(255,255,255,0.08);
   }
 }
 

@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 1.5 Rate limit по userId
-    const rl = checkRateLimit(`reports:${session.user.id}`, REPORT_RATE_LIMIT);
+    const rl = await checkRateLimit(`reports:${session.user.id}`, REPORT_RATE_LIMIT);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Слишком много запросов. Подождите минуту." },

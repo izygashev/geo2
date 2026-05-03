@@ -124,10 +124,76 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// ── YooKassa Payment API response type ───────────────────────────────────────
+interface YookassaPayment {
+  id: string;
+  status: "pending" | "waiting_for_capture" | "succeeded" | "canceled";
+  amount: { value: string; currency: string };
+  payment_method?: { id: string; saved: boolean; type: string };
+  metadata?: { userId?: string; subscriptionId?: string; planKey?: string };
+}
+
+/**
+ * Fetches a payment from YooKassa API server-to-server using shop credentials.
+ * This is the ONLY trusted source of truth for payment status and metadata.
+ * Returns null on any network / auth error so callers can fail-safe.
+ */
+async function fetchYookassaPayment(paymentId: string): Promise<YookassaPayment | null> {
+  const shopId = process.env.YOOKASSA_SHOP_ID;
+  const secretKey = process.env.YOOKASSA_SECRET_KEY;
+
+  if (!shopId || !secretKey) {
+    console.error("[webhook] YOOKASSA_SHOP_ID or YOOKASSA_SECRET_KEY not configured");
+    return null;
+  }
+
+  const credentials = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
+
+  try {
+    const response = await fetch(`https://api.yookassa.ru/v3/payments/${encodeURIComponent(paymentId)}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Basic ${credentials}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`[webhook] YooKassa API returned ${response.status} for payment ${paymentId}`);
+      return null;
+    }
+
+    return (await response.json()) as YookassaPayment;
+  } catch (err) {
+    console.error(`[webhook] Failed to fetch payment ${paymentId} from YooKassa:`, err);
+    return null;
+  }
+}
+
 async function handlePaymentSucceeded(
   paymentObject: YookassaWebhookBody["object"]
 ) {
-  const { id: yookassaPaymentId, metadata, payment_method } = paymentObject;
+  const { id: yookassaPaymentId } = paymentObject;
+
+  // ── Server-to-server verification ──────────────────────────────────────────
+  // NEVER trust the incoming webhook payload for financial decisions.
+  // Re-fetch the payment directly from YooKassa API using our credentials.
+  const verified = await fetchYookassaPayment(yookassaPaymentId);
+
+  if (!verified) {
+    console.error(`[webhook] Could not verify payment ${yookassaPaymentId} with YooKassa API`);
+    return;
+  }
+
+  if (verified.status !== "succeeded") {
+    console.warn(
+      `[webhook] Payment ${yookassaPaymentId} status is '${verified.status}' according to YooKassa API, not 'succeeded'. Ignoring.`
+    );
+    return;
+  }
+
+  // Use ONLY the verified data from the API response — not the webhook payload
+  const { metadata, payment_method, amount } = verified;
 
   // Идемпотентность — проверяем, не обработан ли уже этот платёж
   const existingPayment = await prisma.payment.findUnique({
@@ -179,7 +245,7 @@ async function handlePaymentSucceeded(
         userId: metadata.userId!,
         subscriptionId: metadata.subscriptionId,
         yookassaPaymentId,
-        amount: Math.round(parseFloat(paymentObject.amount.value) * 100),
+        amount: Math.round(parseFloat(amount.value) * 100),
         credits: creditsToAdd,
         status: "SUCCEEDED",
         description: planConfig?.description ?? "Подписка",
@@ -221,7 +287,24 @@ async function handlePaymentSucceeded(
 async function handlePaymentCancelled(
   paymentObject: YookassaWebhookBody["object"]
 ) {
-  const { id: yookassaPaymentId, metadata } = paymentObject;
+  const { id: yookassaPaymentId } = paymentObject;
+
+  // ── Server-to-server verification ──────────────────────────────────────────
+  const verified = await fetchYookassaPayment(yookassaPaymentId);
+
+  if (!verified) {
+    console.error(`[webhook] Could not verify cancelled payment ${yookassaPaymentId} with YooKassa API`);
+    return;
+  }
+
+  if (verified.status !== "canceled") {
+    console.warn(
+      `[webhook] Payment ${yookassaPaymentId} status is '${verified.status}' according to YooKassa API, not 'canceled'. Ignoring.`
+    );
+    return;
+  }
+
+  const { metadata } = verified;
 
   // Обновляем статус платежа
   await prisma.payment.updateMany({

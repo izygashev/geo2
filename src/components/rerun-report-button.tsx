@@ -51,18 +51,23 @@ export function RerunReportButton({ projectUrl }: RerunReportButtonProps) {
   }
 
   return (
-    <Button
-      onClick={handleRerun}
-      disabled={loading}
-      data-pdf-hide
-      className="gap-2 rounded-md border border-[#EAEAEA] bg-white text-sm font-medium text-[#1a1a1a] hover:bg-[#FBFBFA] shadow-none"
-    >
-      {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <RefreshCw className="h-4 w-4" />
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        onClick={handleRerun}
+        disabled={loading}
+        data-pdf-hide
+        className="gap-2 rounded-md border border-[#EAEAEA] bg-white text-sm font-medium text-[#1a1a1a] hover:bg-[#FBFBFA] shadow-none"
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <RefreshCw className="h-4 w-4" />
+        )}
+        {loading ? "Запуск…" : "Обновить анализ"}
+      </Button>
+      {loading && (
+        <p className="text-[11px] text-[#CCCCCC]">Анализ может занимать до 10 минут</p>
       )}
-      {loading ? "Запуск…" : "Обновить анализ"}
-    </Button>
+    </div>
   );
 }

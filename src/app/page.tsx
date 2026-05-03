@@ -119,14 +119,6 @@ export default async function HomePage() {
 
           {/* Content */}
           <div className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-6 py-24 text-center lg:px-8 lg:py-32">
-            {/* Badge */}
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-neutral-200/60 bg-white/60 px-4 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur-sm">
-              <Sparkles className="h-3.5 w-3.5 text-[#999]" strokeWidth={1.5} />
-              <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#666]">
-                AI Visibility Platform
-              </span>
-            </div>
-
             <h1 className="font-sans text-[2.75rem] font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-[3.25rem] md:text-[3.75rem] lg:text-[4.25rem]">
               Узнайте, рекомендует
               <br />
@@ -312,7 +304,7 @@ export default async function HomePage() {
                 {
                   step: "02",
                   title: "Получите отчёт",
-                  desc: "Через 2 минуты получите детальный отчёт с Geo Score, Share of Voice, анализом конкурентов и списком рекомендаций.",
+                  desc: "После анализа Вы получаете детальный отчёт с Geo Score, Share of Voice, анализом конкурентов и списком рекомендаций.",
                 },
                 {
                   step: "03",
@@ -503,28 +495,6 @@ export default async function HomePage() {
                   </div>
                 </div>
               </article>
-            </div>
-          </div>
-        </section>
-
-        {/* ─── Stats Banner — ERA-inspired social proof ─── */}
-        <section className="border-y border-neutral-100 bg-white py-20 lg:py-24">
-          <div className="mx-auto max-w-5xl px-6 lg:px-8">
-            <div className="grid grid-cols-1 gap-10 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-neutral-100">
-              {[
-                { value: "50K+", label: "Запросов отслежено" },
-                { value: "92%", label: "Точность анализа" },
-                { value: "2 мин", label: "Среднее время отчёта" },
-              ].map((stat) => (
-                <div key={stat.label} className="flex flex-col items-center text-center">
-                  <span className="text-[2.5rem] font-bold tracking-[-0.04em] text-[#0A0A0A] lg:text-[3rem]">
-                    {stat.value}
-                  </span>
-                  <span className="mt-2 text-[13px] font-medium text-[#999]">
-                    {stat.label}
-                  </span>
-                </div>
-              ))}
             </div>
           </div>
         </section>

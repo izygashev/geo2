@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Rate limit payment creation
-    const rl = checkRateLimit(`subscribe:${session.user.id}`, SUBSCRIBE_RATE_LIMIT);
+    const rl = await checkRateLimit(`subscribe:${session.user.id}`, SUBSCRIBE_RATE_LIMIT);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Слишком много попыток. Подождите 10 минут." },

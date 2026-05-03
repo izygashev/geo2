@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest) {
 
     // --- IP-based rate limit ---
     const clientIp = getClientIp(req.headers);
-    const ipRl = checkRateLimit(`pwd-ip:${clientIp}`, PWD_IP_LIMIT);
+    const ipRl = await checkRateLimit(`pwd-ip:${clientIp}`, PWD_IP_LIMIT);
     if (!ipRl.allowed) {
       const retryAfter = Math.ceil((ipRl.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // --- Per-user rate limit ---
-    const userRl = checkRateLimit(`pwd-change:${session.user.id}`, PWD_USER_LIMIT);
+    const userRl = await checkRateLimit(`pwd-change:${session.user.id}`, PWD_USER_LIMIT);
     if (!userRl.allowed) {
       const retryAfter = Math.ceil((userRl.resetAt - Date.now()) / 1000);
       return NextResponse.json(
