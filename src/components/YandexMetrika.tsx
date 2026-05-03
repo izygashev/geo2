@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import Script from 'next/script'
 
-const COUNTER_ID = 99248443
+const COUNTER_ID = 108543042
 
 // Only run in production — no noise from localhost in Metrika reports
 const IS_PROD = process.env.NODE_ENV === 'production'
